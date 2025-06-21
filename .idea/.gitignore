@@ -1,0 +1,13 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+
+# === Application Secrets ===
+application.properties
+application.yml
+application-dev.properties
+application-prod.properties
+
+# === Build System ===
+/target/                 # Maven
+!.mvn/wrapper/maven-wrapper.ja
