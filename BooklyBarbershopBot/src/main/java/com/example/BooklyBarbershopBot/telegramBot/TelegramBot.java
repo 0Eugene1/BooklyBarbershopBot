@@ -1,6 +1,9 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
+import com.example.BooklyBarbershopBot.callBackData.CallBack;
+import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +41,13 @@ public class TelegramBot extends TelegramLongPollingBot {
      * Сервис для работы с данными барбершопов.
      */
     private final BarbershopService barbershopService;
+    private final InlineKeyboard inlineKeyboard;
+    private final CallBack handleCallBack;
+
+    @PostConstruct
+    public void initCallbackLink() {
+        handleCallBack.setTelegramBot(this);
+    }
 
     @Value("${telegrambots.bots[0].username}")
     private String botUsername;
@@ -66,6 +76,9 @@ public class TelegramBot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
             handleTextMessage(update.getMessage());
+        }
+        if (update.hasCallbackQuery()) {
+            handleCallBack.handelCallback(update.getCallbackQuery());
         }
     }
 
@@ -101,12 +114,15 @@ public class TelegramBot extends TelegramLongPollingBot {
                             String greeting = barbershop.getGreeting() != null
                                     ? barbershop.getGreeting()
                                     : "Добро пожаловать!";
-
                             log.info("START command received with slug: {}", slug);
+
+                            String fullText = "🏪 " + barbershop.getName() + "\n\n" + greeting;
 
                             SendMessage response = new SendMessage();
                             response.setChatId(chatId.toString());
-                            response.setText("🏪 " + barbershop.getName() + "\n\n" + greeting);
+                            response.setText(fullText);
+                            response.setReplyMarkup(inlineKeyboard.createMenuInlineKeyboard(slug)); // вот это
+
                             try {
                                 execute(response);
                             } catch (TelegramApiException e) {
