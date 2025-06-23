@@ -63,4 +63,8 @@ public class Barbershop {
      * Ссылка на логотип барбершопа.
      */
     private String logoUrl;
+
+    @Column(name = "yclients_company_id", nullable = false)
+    private String yclientsCompanyId;
+
 }
