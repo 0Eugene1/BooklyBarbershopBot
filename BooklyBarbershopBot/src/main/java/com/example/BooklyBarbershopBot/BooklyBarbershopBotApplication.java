@@ -9,5 +9,5 @@ public class BooklyBarbershopBotApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(BooklyBarbershopBotApplication.class, args);
 	}
-
+//TEST
 }
