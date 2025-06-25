@@ -4,7 +4,6 @@ import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.repository.BarbershopRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 import java.util.Optional;
 /**
  * Сервисный класс для работы с сущностью {@link Barbershop}.
