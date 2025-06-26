@@ -6,11 +6,13 @@ import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@Slf4j
 public class ParsingDtoService {
 
     private final YclientsService yclientsService;

@@ -1,5 +1,6 @@
 package com.example.BooklyBarbershopBot.service.yclients;
 
+import com.example.BooklyBarbershopBot.dto.BookDatesResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,23 @@ public class YclientsService {
                 .doOnNext(body -> log.info("Ответ YClients:\n{}", body))
                 .block();
     }
+
+    // Даты доступные для бронирования
+    public BookDatesResponse getAvailableBookingDates(String companyId, Long staffId, Long serviceId) {
+        return webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .defaultHeader("Accept", "application/vnd.yclients.v2+json")
+                        .path("/book_dates/" + companyId)
+                        .queryParam("staff_id", staffId)
+                        .queryParam("service_ids", serviceId)
+                        .build())
+                .header("Accept", "application/vnd.yclients.v2+json")
+                .retrieve()
+                .bodyToMono(BookDatesResponse.class)
+                .doOnNext(response -> log.info("Доступные даты бронирования: {}", response))
+                .block();
+    }
+
 
 //    //Метод получения одной категории услуг
 //    public CategoryDto getCategory(String companyId, String categoryId) {
