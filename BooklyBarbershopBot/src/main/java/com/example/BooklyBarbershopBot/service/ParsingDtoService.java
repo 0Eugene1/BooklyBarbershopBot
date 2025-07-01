@@ -17,27 +17,26 @@ public class ParsingDtoService {
 
     private final YclientsService yclientsService;
 
-    // Внедряем через конструктор
     public ParsingDtoService(YclientsService yclientsService) {
         this.yclientsService = yclientsService;
     }
 
     public List<ServiceDto> getServicesParsed(String companyId) throws Exception {
-        String json = yclientsService.getServices(companyId);
+        String json = yclientsService.getServicesRawJson(companyId); // ✅ исправлено
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(json);
         JsonNode dataNode = root.path("data");
-        return mapper.readValue(dataNode.toString(), new TypeReference<List<ServiceDto>>(){});
+        return mapper.readValue(dataNode.toString(), new TypeReference<List<ServiceDto>>() {});
     }
 
     public List<StaffDto> getStaffParsed(String companyId) throws Exception {
-        String json = yclientsService.getStaff(companyId);
+        String json = yclientsService.getStaffRawJson(companyId); // ✅ исправлено
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(json);
         JsonNode dataNode = root.path("data");
         return mapper.readValue(dataNode.toString(), new TypeReference<List<StaffDto>>() {});
     }
-
 }
+
 
 
