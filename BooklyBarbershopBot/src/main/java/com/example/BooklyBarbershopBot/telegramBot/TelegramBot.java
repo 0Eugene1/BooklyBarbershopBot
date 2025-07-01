@@ -1,18 +1,25 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
+import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Contact;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Основной класс Telegram-бота, реализующий функционал обработки входящих сообщений через долгие опросы (Long Polling).
@@ -43,6 +50,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final BarbershopService barbershopService;
     private final InlineKeyboard inlineKeyboard;
     private final CallBack handleCallBack;
+    private final YclientsService yclientsService;
+    @Getter
+    private final Map<Long, BookingData> bookingCache = new ConcurrentHashMap<>();
+
 
     @PostConstruct
     public void initCallbackLink() {
@@ -80,23 +91,59 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasCallbackQuery()) {
             handleCallBack.handelCallback(update.getCallbackQuery());
         }
+        if (update.hasMessage() && update.getMessage().hasContact()) {
+            Long chatId = update.getMessage().getChatId();
+            Contact contact = update.getMessage().getContact();
+            String phone = contact.getPhoneNumber();
+
+            BookingData data = bookingCache.get(chatId);
+            if (data == null) {
+                sendMessage(chatId, "⚠️ Сначала выберите услугу и время.");
+                return;
+            }
+
+            // 👉 Подготовка данных для создания брони
+            log.info("Создание брони: {}, телефон: {}", data, phone);
+
+            try {
+                boolean success = yclientsService.createBooking(
+                        data.getSlug(),
+                        data.getServiceId(),
+                        data.getStaffId(),
+                        data.getDatetime(),
+                        phone
+                );
+
+                if (success) {
+                    sendMessage(chatId, "✅ Запись успешно создана! Мы ждём вас в указанное время.");
+                } else {
+                    sendMessage(chatId, "❌ Не удалось создать запись. Попробуйте позже.");
+                }
+
+                bookingCache.remove(chatId); // удаляем временные данные
+
+            } catch (Exception e) {
+                log.error("Ошибка при создании брони", e);
+                sendMessage(chatId, "❌ Ошибка при создании записи.");
+            }
+        }
     }
 
-    /**
-     * Обрабатывает текстовое сообщение пользователя.
-     * <p>
-     * Если сообщение начинается с команды <code>/start</code> и содержит параметр (slug барбершопа),
-     * бот пытается найти соответствующий барбершоп через {@link BarbershopService}.
-     * <ul>
-     * <li>Если барбершоп найден — отправляет приветственное сообщение с названием и приветствием барбершопа.</li>
-     * <li>Если не найден — отправляет сообщение об ошибке.</li>
-     * </ul>
-     * Если параметр отсутствует, бот просит пользователя уточнить ссылку.
-     * <p>
-     * Все сообщения отправляются в чат пользователя, который инициировал диалог.
-     *
-     * @param message входящее сообщение от пользователя
-     */
+        /**
+         * Обрабатывает текстовое сообщение пользователя.
+         * <p>
+         * Если сообщение начинается с команды <code>/start</code> и содержит параметр (slug барбершопа),
+         * бот пытается найти соответствующий барбершоп через {@link BarbershopService}.
+         * <ul>
+         * <li>Если барбершоп найден — отправляет приветственное сообщение с названием и приветствием барбершопа.</li>
+         * <li>Если не найден — отправляет сообщение об ошибке.</li>
+         * </ul>
+         * Если параметр отсутствует, бот просит пользователя уточнить ссылку.
+         * <p>
+         * Все сообщения отправляются в чат пользователя, который инициировал диалог.
+         *
+         * @param message входящее сообщение от пользователя
+         */
     private void handleTextMessage(Message message) {
         String text = message.getText();
         Long chatId = message.getChatId();
@@ -146,4 +193,16 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
+    public void sendMessage(Long chatId, String text) {
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId.toString())
+                .text(text)
+                .build();
+        try {
+            this.execute(message);
+        } catch (TelegramApiException e) {
+            log.error("❌ Ошибка при отправке сообщения", e);
+        }
+    }
+
 }

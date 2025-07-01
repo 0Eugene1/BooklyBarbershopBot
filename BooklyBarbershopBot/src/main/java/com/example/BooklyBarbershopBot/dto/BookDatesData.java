@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 @Data
-public class BookDatesResponse {
+public class BookDatesData {
 
     @JsonProperty("booking_days")
     private Map<String, List<String>> bookingDays;

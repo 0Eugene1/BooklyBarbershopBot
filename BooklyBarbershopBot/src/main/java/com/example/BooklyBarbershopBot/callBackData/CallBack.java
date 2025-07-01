@@ -1,8 +1,6 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
-import com.example.BooklyBarbershopBot.dto.BookDatesResponse;
-import com.example.BooklyBarbershopBot.dto.ServiceDto;
-import com.example.BooklyBarbershopBot.dto.StaffDto;
+import com.example.BooklyBarbershopBot.dto.*;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ParsingDtoService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
@@ -15,7 +13,11 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -162,20 +164,20 @@ public class CallBack {
                     String companyId = barbershop.getYclientsCompanyId();
 
                     try {
-                        BookDatesResponse bookDates = yclientsService.getAvailableBookingDates(companyId, staffId, serviceId);
+                        ApiResponse<BookDatesData> response = yclientsService.getAvailableBookingDates(companyId, staffId, serviceId);
 
                         //FIXME ВРЕМЕНННЫЙ ЛОГ !
                         log.info("➡️ Запрос /book_dates с параметрами: companyId={}, staffId={}, serviceId={}", companyId, staffId, serviceId);
 
 
-                        if (bookDates.getBookingDates() == null || bookDates.getBookingDates().isEmpty()) {
+                        if (response.getData() == null || response.getData().getBookingDates() == null || response.getData().getBookingDates().isEmpty()) {
                             sendMessage(chatId, "📅 Нет доступных дат для записи.");
                             return;
                         }
 
                         // создаём кнопки с датами
                         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                        for (String date : bookDates.getBookingDates()) {
+                        for (String date : response.getData().getBookingDates()) {
                             InlineKeyboardButton button = new InlineKeyboardButton();
                             button.setText(date);
                             button.setCallbackData("date_" + date + "_" + staffId + "_" + serviceId + "_" + slug);
@@ -202,18 +204,152 @@ public class CallBack {
                 log.error("Ошибка обработки callback service_", e);
                 sendMessage(chatId, "❌ Произошла ошибка.");
             }
-    }else {
+        } else if (data.startsWith("date_")) {
+            try {
+                String[] parts = data.split("_", 5);
+                if (parts.length < 5) {
+                    sendMessage(chatId, "⚠️ Ошибка в данных callback.");
+                    return;
+                }
+
+                String date = parts[1];
+                Long staffId = Long.parseLong(parts[2]);
+                Long serviceId = Long.parseLong(parts[3]);
+                String slug = parts[4];
+
+                barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
+                    String companyId = barbershop.getYclientsCompanyId();
+                    try {
+                        BookTimeResponse timeResponse = yclientsService.getAvailableTimes(companyId, staffId, date, serviceId);
+
+                        if (timeResponse.getData() == null || timeResponse.getData().isEmpty()) {
+                            sendMessage(chatId, "⏱ Нет свободного времени на эту дату.");
+                            return;
+                        }
+
+                        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                        for (BookTimeDto slot : timeResponse.getData()) {
+                            InlineKeyboardButton button = new InlineKeyboardButton();
+                            button.setText(slot.getTime());
+
+                            // безопасный формат: 2025-06-28T18:30:00+07:00 → 2025-06-28_18-30
+                            String safeDatetime = slot.getDatetime().substring(0, 16)  // "2025-06-28T18:30"
+                                    .replace("T", "_")
+                                    .replace(":", "-"); // "2025-06-28_18-30"
+
+                            String callbackData = String.format("slot_%s_%d_%d_%s", safeDatetime, staffId, serviceId, slug);
+
+                            // если слишком длинно — можно убрать slug или сократить
+                            if (callbackData.length() > 64) {
+                                callbackData = String.format("slot_%s_%d_%d", safeDatetime, staffId, serviceId);
+                            }
+
+                            button.setCallbackData(callbackData);
+                            rows.add(Collections.singletonList(button));
+                        }
+
+                        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+                        keyboard.setKeyboard(rows);
+
+                        SendMessage message = SendMessage.builder()
+                                .chatId(chatId.toString())
+                                .text("⏰ Выберите удобное время:")
+                                .replyMarkup(keyboard)
+                                .build();
+
+                        telegramBot.execute(message);
+                    } catch (Exception e) {
+                        log.error("Ошибка при получении времени", e);
+                        sendMessage(chatId, "❌ Не удалось получить доступное время.");
+                    }
+                }, () -> sendMessage(chatId, "❌ Барбершоп не найден."));
+            } catch (Exception e) {
+                log.error("Ошибка при обработке callback date_", e);
+                sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
+            }
+        } else if (data.startsWith("slot_")) {
+            try {
+                String[] parts = data.split("_", 6); // нужно 6, т.к. slug может содержать "_"
+
+                if (parts.length < 5) {
+                    sendMessage(chatId, "⚠️ Ошибка в данных callback.");
+                    return;
+                }
+
+                String date = parts[1];        // "2025-06-28"
+                String time = parts[2];        // "16-45"
+                Long staffId = Long.parseLong(parts[3]);
+                Long serviceId = Long.parseLong(parts[4]);
+                String slug = parts[5];
+
+                String datetime = restoreIsoDatetime(date + "_" + time); // → "2025-06-28T16:45:00"
+
+                barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
+                    String companyId = barbershop.getYclientsCompanyId();
+
+                // Получи имя мастера и услуги
+                    String staffName = yclientsService.getStaffName(companyId, staffId);
+                    String serviceName = yclientsService.getServiceName(companyId, serviceId);
+
+                telegramBot.getBookingCache().put(chatId, new BookingData(slug, serviceId, staffId, datetime, staffName, serviceName));
+
+                // кнопка запроса номера
+                KeyboardButton contactButton = new KeyboardButton("📱 Отправить номер");
+                contactButton.setRequestContact(true);
+
+                KeyboardRow row = new KeyboardRow();
+                row.add(contactButton);
+
+                ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup(List.of(row));
+                markup.setResizeKeyboard(true);
+                markup.setOneTimeKeyboard(true);
+
+                String confirmText = """
+                ✅ Вы выбрали:
+                • Дата и время: %s
+                • Мастер: %s
+                • Услуга: %s
+
+                Пожалуйста, отправьте номер телефона для подтверждения записи.
+                """.formatted(datetime, staffName, serviceName);
+
+                SendMessage message = SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text(confirmText)
+                        .replyMarkup(markup)
+                        .build();
+
+                    try {
+                        telegramBot.execute(message);
+                    } catch (TelegramApiException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                }, () -> sendMessage(chatId, "❌ Барбершоп не найден."));  // <-- закрываем ifPresentOrElse правильно
+            } catch (Exception e){
+                    log.error("Ошибка обработки callback slot_", e);
+                    sendMessage(chatId, "❌ Произошла ошибка при выборе времени.");
+                }
+    } else {
         sendMessage(chatId, "⚠️ Неизвестная команда.");
     }
-}
-
-    private void sendMessage(Long chatId, String text) {
-        try {
-            telegramBot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
         }
+    private String restoreIsoDatetime(String safeDatetime) {
+        // safeDatetime = "2025-06-28_16-45"
+        String[] parts = safeDatetime.split("_");
+        String date = parts[0]; // "2025-06-28"
+        String time = parts[1].replace("-", ":"); // "16:45"
+        return date + "T" + time + ":00"; // "2025-06-28T16:45:00"
     }
+
+
+    private void sendMessage(Long chatId, String text){
+            try {
+                telegramBot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
+            } catch (Exception e) {
+                log.error("Ошибка при отправке сообщения", e);
+            }
+        }
 }
 
 //            String rawResponse = yClientsService.getServices(companyId);
