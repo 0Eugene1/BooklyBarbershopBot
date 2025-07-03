@@ -55,7 +55,7 @@ public class SlotCallbackHandler implements CallbackHandler{
                 String staffName = yclientsService.getStaffName(companyId, staffId);
                 String serviceName = yclientsService.getServiceName(companyId, serviceId);
 
-                bot.getBookingCache().put(chatId, new BookingData(slug, serviceId, staffId, datetime, staffName, serviceName));
+                bot.getBookingCache().put(chatId, new BookingData(slug, serviceId, staffId, datetime, staffName, serviceName, null, false));
 
                 KeyboardButton contactButton = new KeyboardButton("📱 Отправить номер");
                 contactButton.setRequestContact(true);

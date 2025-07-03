@@ -104,4 +104,14 @@ public class YclientsHttpClient {
                 .doOnNext(response -> log.info("📩 Ответ от YClients на бронирование: {}", response))
                 .block();
     }
+
+    public String deleteBooking(String companyId, Long recordId, String partnerToken) {
+        return webClient.delete()
+                .uri("/book_record/" + companyId + "/" + recordId)
+                .header("Authorization", "Bearer " + partnerToken)
+                .header("Accept", "application/vnd.yclients.v2+json")
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+    }
 }

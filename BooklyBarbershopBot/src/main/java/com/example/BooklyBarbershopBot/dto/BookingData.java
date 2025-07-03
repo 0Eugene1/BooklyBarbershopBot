@@ -6,7 +6,6 @@ import lombok.Getter;
 
 @Data
 @AllArgsConstructor
-
 public class BookingData {
 
     private String slug;
@@ -17,4 +16,6 @@ public class BookingData {
     private String staffName;
     @Getter
     private String serviceName;
+    private String phone;
+    private boolean awaitingCode;
 }

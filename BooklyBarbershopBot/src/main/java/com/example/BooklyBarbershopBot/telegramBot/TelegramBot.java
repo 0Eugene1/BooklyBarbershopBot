@@ -2,6 +2,7 @@ package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
@@ -85,51 +86,121 @@ public class TelegramBot extends TelegramLongPollingBot {
      */
     @Override
     public void onUpdateReceived(Update update) {
+
         if (update.hasMessage() && update.getMessage().hasText()) {
-            handleTextMessage(update.getMessage());
+            String messageText = update.getMessage().getText();
+            Long chatId = update.getMessage().getChatId();
+
+            if (messageText.equals("/cancel")) {
+                handleCancelCommand(chatId);
+                return;
+            }
         }
         if (update.hasCallbackQuery()) {
             handleCallBack.handelCallback(update.getCallbackQuery());
+            return;
         }
-        if (update.hasMessage() && update.getMessage().hasContact()) {
-            Long chatId = update.getMessage().getChatId();
-            Contact contact = update.getMessage().getContact();
-            String phone = contact.getPhoneNumber();
 
-            BookingData data = bookingCache.get(chatId);
-            if (data == null) {
-                sendMessage(chatId, "⚠️ Сначала выберите услугу и время.");
+        if (update.hasMessage()) {
+            Message message = update.getMessage();
+            Long chatId = message.getChatId();
+
+            // 👇 Пользователь отправил контакт (телефон)
+            if (message.hasContact()) {
+                Contact contact = message.getContact();
+                String phone = contact.getPhoneNumber();
+
+                BookingData data = bookingCache.get(chatId);
+                if (data == null) {
+                    sendMessage(chatId, "⚠️ Сначала выберите услугу и время.");
+                    return;
+                }
+
+                log.info("Создание брони: {}, телефон: {}", data, phone);
+                try {
+                    data.setPhone(phone); // сохраняем для последующей проверки
+
+                    boolean success = yclientsService.createBooking(
+                            data.getSlug(),
+                            data.getServiceId(),
+                            data.getStaffId(),
+                            data.getDatetime(),
+                            phone
+                    );
+
+                    if (success) {
+                        sendMessage(chatId, "✅ Запись успешно создана! Мы ждём вас в указанное время.");
+                        bookingCache.remove(chatId);
+                    } else {
+                        sendMessage(chatId, "❌ Не удалось создать запись. Попробуйте позже.");
+                    }
+                } catch (YclientsSmsConfirmationException e) {
+                    data.setAwaitingCode(true);
+                    bookingCache.put(chatId, data);
+
+                    sendMessage(chatId, """
+                        🔐 Ваш номер требует подтверждения.
+                        Пожалуйста, введите код из SMS, который пришёл вам.
+                        """);
+                } catch (Exception e) {
+                    log.error("Ошибка при создании брони", e);
+                    sendMessage(chatId, "❌ Ошибка при создании записи.");
+                }
                 return;
             }
 
-            // 👉 Подготовка данных для создания брони
-            log.info("Создание брони: {}, телефон: {}", data, phone);
+            // 👇 Пользователь отправил текст (возможно — код из SMS)
+            if (message.hasText()) {
+                String text = message.getText().trim();
+                BookingData data = bookingCache.get(chatId);
 
-            try {
-                boolean success = yclientsService.createBooking(
-                        data.getSlug(),
-                        data.getServiceId(),
-                        data.getStaffId(),
-                        data.getDatetime(),
-                        phone
-                );
+                if (data != null && data.isAwaitingCode()) {
+                    try {
+                        boolean success = yclientsService.createBooking(
+                                data.getSlug(),
+                                data.getServiceId(),
+                                data.getStaffId(),
+                                data.getDatetime(),
+                                text // ← пользовательский код
+                        );
 
-                if (success) {
-                    sendMessage(chatId, "✅ Запись успешно создана! Мы ждём вас в указанное время.");
-                } else {
-                    sendMessage(chatId, "❌ Не удалось создать запись. Попробуйте позже.");
+                        if (success) {
+                            sendMessage(chatId, "✅ Запись подтверждена!");
+                            bookingCache.remove(chatId);
+                        } else {
+                            sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код.");
+                        }
+                    } catch (Exception e) {
+                        log.error("Ошибка при подтверждении записи по SMS", e);
+                        sendMessage(chatId, "❌ Ошибка при подтверждении записи.");
+                    }
+                    return;
                 }
 
-                bookingCache.remove(chatId); // удаляем временные данные
-
-            } catch (Exception e) {
-                log.error("Ошибка при создании брони", e);
-                sendMessage(chatId, "❌ Ошибка при создании записи.");
+                // 👇 Если код не ожидается — обычная текстовая команда
+                handleTextMessage(message);
             }
         }
     }
 
-        /**
+    private void handleCancelCommand(Long chatId) {
+        // Очистим кеш записи
+        bookingCache.remove(chatId);
+
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId.toString())
+                .text("❌ Запись отменена. Вы можете начать заново с команды /start")
+                .build();
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("Ошибка при отправке сообщения отмены", e);
+        }
+    }
+
+
+    /**
          * Обрабатывает текстовое сообщение пользователя.
          * <p>
          * Если сообщение начинается с команды <code>/start</code> и содержит параметр (slug барбершопа),

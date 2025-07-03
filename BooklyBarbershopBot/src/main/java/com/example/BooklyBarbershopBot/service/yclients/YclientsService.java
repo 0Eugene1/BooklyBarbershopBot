@@ -2,8 +2,11 @@ package com.example.BooklyBarbershopBot.service.yclients;
 
 import com.example.BooklyBarbershopBot.dto.*;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
+import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +46,7 @@ public class YclientsService {
     public String getServiceName(String companyId, Long serviceId) {
         return dataService.getServiceName(companyId, serviceId);
     }
+
     public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId) {
         return httpClient.getAvailableTimes(companyId, staffId, date, serviceId, partnerToken);
     }
@@ -62,12 +66,13 @@ public class YclientsService {
 
     // Получение дат и времени можно оставить здесь, либо тоже делегировать, если хочется
 
-    public boolean createBooking(String slug, Long serviceId, Long staffId, String datetime, String phone) throws JsonProcessingException {
+    public Optional<Long> createBooking(String slug, Long serviceId, Long staffId, String datetime, String phone) throws JsonProcessingException {
         Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(slug);
         if (barbershopOpt.isEmpty()) {
             log.warn("Барбершоп с слагом {} не найден", slug);
-            return false;
+            return Optional.empty();
         }
+
         String companyId = barbershopOpt.get().getYclientsCompanyId();
 
         Map<String, Object> bookingPayload = new HashMap<>();
@@ -86,16 +91,55 @@ public class YclientsService {
         try {
             String result = httpClient.postBooking(companyId, bookingPayload, partnerToken);
             log.info("Ответ на создание записи: {}", result);
-            return true;
+
+            // 👉 Парсим ответ и извлекаем record_id
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(result);
+
+            if (root.path("success").asBoolean()) {
+                long recordId = root.path("data").path("id").asLong();
+                log.info("✅ Запись успешно создана. record_id = {}", recordId);
+                return Optional.of(recordId);
+            } else {
+                log.warn("⚠️ Запись не создана. Ответ: {}", result);
+                return Optional.empty();
+            }
+
         } catch (WebClientResponseException e) {
             log.error("Ошибка при создании записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
-            return false;
+            if (e.getRawStatusCode() == 422 && e.getResponseBodyAsString().contains("\"code\":432")) {
+                throw new YclientsSmsConfirmationException();
+            }
+            return Optional.empty();
         } catch (Exception e) {
             log.error("Ошибка при создании записи", e);
+            return Optional.empty();
+        }
+    }
+
+    public boolean cancelBooking(String slug, Long recordId) {
+        Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(slug);
+        if (barbershopOpt.isEmpty()) {
+            log.warn("Барбершоп с слагом {} не найден", slug);
+            return false;
+        }
+
+        String companyId = barbershopOpt.get().getYclientsCompanyId();
+
+        try {
+            String result = httpClient.deleteBooking(companyId, recordId, partnerToken);
+            log.info("🗑 Ответ на удаление записи: {}", result);
+            return true;
+        } catch (WebClientResponseException e) {
+            log.error("Ошибка при удалении записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
+            return false;
+        } catch (Exception e) {
+            log.error("Ошибка при удалении записи", e);
             return false;
         }
     }
 }
+
 
 
 
