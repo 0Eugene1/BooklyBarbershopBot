@@ -1,5 +1,7 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
+import com.example.BooklyBarbershopBot.dto.RecordInfo;
+import com.example.BooklyBarbershopBot.service.BookingStorageService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 public class CancelCallBackHandler implements CallbackHandler {
 
     private final YclientsService yclientsService;
+    private final BookingStorageService bookingStorage;
 
     @Override
     public boolean supports(String data) {
@@ -22,23 +25,20 @@ public class CancelCallBackHandler implements CallbackHandler {
 
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
-        String data = callbackQuery.getData(); // "cancel_slug"
         Long chatId = callbackQuery.getMessage().getChatId();
-        String slug = data.replace("cancel_", "");
 
-        // Предполагаем, что recordId ранее сохранён в кэше или памяти
-        Long recordId = bot.getRecordId(chatId);
-        if (recordId == null) {
-            sendMessage(bot, chatId, "❗ Не найдена активная запись для отмены.");
+        RecordInfo record = bookingStorage.get(chatId);
+        if (record == null) {
+            sendMessage(bot, chatId, "⚠️ Нет записи, которую можно отменить.");
             return;
         }
 
-        boolean success = yclientsService.cancelBooking(slug, recordId);
+        boolean success = yclientsService.cancelBooking(record.getRecordId(), record.getRecordHash());
         if (success) {
-            bot.clearRecordId(chatId); // Очистим кэш, если используете
-            sendMessage(bot, chatId, "❌ Ваша запись успешно отменена.");
+            bookingStorage.remove(chatId);
+            sendMessage(bot, chatId, "✅ Запись отменена.");
         } else {
-            sendMessage(bot, chatId, "⚠️ Не удалось отменить запись. Попробуйте позже.");
+            sendMessage(bot, chatId, "❌ Не удалось отменить запись. Попробуйте позже.");
         }
     }
 
@@ -50,4 +50,4 @@ public class CancelCallBackHandler implements CallbackHandler {
         }
     }
 }
-}
+

@@ -1,11 +1,10 @@
 package com.example.BooklyBarbershopBot.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.Getter;
+import lombok.*;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class BookingData {
 
     private String slug;
@@ -18,4 +17,15 @@ public class BookingData {
     private String serviceName;
     private String phone;
     private boolean awaitingCode;
+
+    //Поля для удаление записи
+    private Long recordId;
+    private String recordHash;
+
+    @Getter
+    @Setter
+    private String fullName;           // новое поле — имя клиента
+    @Getter
+    @Setter
+    private boolean awaitingFullName;  // новый флаг — ожидаем имя клиента
 }

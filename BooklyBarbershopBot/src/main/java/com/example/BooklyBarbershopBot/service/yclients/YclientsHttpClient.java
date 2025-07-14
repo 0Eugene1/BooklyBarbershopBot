@@ -105,13 +105,16 @@ public class YclientsHttpClient {
                 .block();
     }
 
-    public String deleteBooking(String companyId, Long recordId, String partnerToken) {
+    //Метод отмены брони
+    public String deleteBooking(String url, String partnerToken, String userToken) {
         return webClient.delete()
-                .uri("/book_record/" + companyId + "/" + recordId)
-                .header("Authorization", "Bearer " + partnerToken)
+                .uri(url)
+                .header("Authorization", "Bearer " + partnerToken + ", User " + userToken)
                 .header("Accept", "application/vnd.yclients.v2+json")
+                .header("Content-Type", "application/json")
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
     }
+
 }

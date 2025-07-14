@@ -2,6 +2,7 @@ package com.example.BooklyBarbershopBot.service.yclients;
 
 import com.example.BooklyBarbershopBot.dto.*;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
+import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,6 +30,9 @@ public class YclientsService {
 
     @Value("${yclients.partner-token}")
     private String partnerToken;
+    @Value("${yclients.user-token}")
+    private String userToken;
+
 
     public List<StaffDto> getStaff(String companyId) {
         // просто делегируем
@@ -66,78 +70,82 @@ public class YclientsService {
 
     // Получение дат и времени можно оставить здесь, либо тоже делегировать, если хочется
 
-    public Optional<Long> createBooking(String slug, Long serviceId, Long staffId, String datetime, String phone) throws JsonProcessingException {
-        Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(slug);
+    public boolean createBooking(BookingData data, Client client, String smsCode) throws JsonProcessingException {
+        Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(data.getSlug());
         if (barbershopOpt.isEmpty()) {
-            log.warn("Барбершоп с слагом {} не найден", slug);
-            return Optional.empty();
+            log.warn("Барбершоп с слагом {} не найден", data.getSlug());
+            return false;
         }
 
         String companyId = barbershopOpt.get().getYclientsCompanyId();
 
         Map<String, Object> bookingPayload = new HashMap<>();
-        bookingPayload.put("phone", phone);
-        bookingPayload.put("fullname", "Клиент Telegram");
-        bookingPayload.put("email", "no-reply@example.com");
+        bookingPayload.put("phone", client.getPhone());
+        log.info("Отправляем в Yclients fullname: {}", client.getFullName());
+        bookingPayload.put("fullname", client.getFullName());
+        bookingPayload.put("email", client.getEmail());
 
         Map<String, Object> appointment = new HashMap<>();
         appointment.put("id", 1);
-        appointment.put("services", List.of(serviceId));
-        appointment.put("staff_id", staffId);
-        appointment.put("datetime", datetime);
+        appointment.put("services", List.of(data.getServiceId()));
+        appointment.put("staff_id", data.getStaffId());
+        appointment.put("datetime", data.getDatetime());
 
         bookingPayload.put("appointments", List.of(appointment));
+
+        if (smsCode != null) {
+            bookingPayload.put("code", smsCode);
+        }
 
         try {
             String result = httpClient.postBooking(companyId, bookingPayload, partnerToken);
             log.info("Ответ на создание записи: {}", result);
 
-            // 👉 Парсим ответ и извлекаем record_id
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(result);
+            JsonNode dataNode = root.path("data");
 
-            if (root.path("success").asBoolean()) {
-                long recordId = root.path("data").path("id").asLong();
-                log.info("✅ Запись успешно создана. record_id = {}", recordId);
-                return Optional.of(recordId);
+            if (!dataNode.isMissingNode() && dataNode.isArray() && dataNode.size() > 0) {
+                JsonNode firstRecord = dataNode.get(0);
+                Long recordId = firstRecord.path("record_id").asLong();
+                String recordHash = firstRecord.path("record_hash").asText();
+
+                data.setRecordId(recordId);
+                data.setRecordHash(recordHash);
+
+                return true;
             } else {
-                log.warn("⚠️ Запись не создана. Ответ: {}", result);
-                return Optional.empty();
+                log.warn("Ответ от Yclients не содержит данных записи.");
+                return false;
             }
-
         } catch (WebClientResponseException e) {
             log.error("Ошибка при создании записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
             if (e.getRawStatusCode() == 422 && e.getResponseBodyAsString().contains("\"code\":432")) {
                 throw new YclientsSmsConfirmationException();
             }
-            return Optional.empty();
+            return false;
         } catch (Exception e) {
             log.error("Ошибка при создании записи", e);
-            return Optional.empty();
+            return false;
         }
     }
 
-    public boolean cancelBooking(String slug, Long recordId) {
-        Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(slug);
-        if (barbershopOpt.isEmpty()) {
-            log.warn("Барбершоп с слагом {} не найден", slug);
-            return false;
-        }
 
-        String companyId = barbershopOpt.get().getYclientsCompanyId();
 
+    //Метод удаления
+    public boolean cancelBooking(Long recordId, String recordHash) {
         try {
-            String result = httpClient.deleteBooking(companyId, recordId, partnerToken);
-            log.info("🗑 Ответ на удаление записи: {}", result);
+            String url = String.format("/user/records/%d/%s", recordId, recordHash);
+            String result = httpClient.deleteBooking(url, partnerToken, userToken);
+            log.info("Удаление записи успешно: {}", result);
             return true;
         } catch (WebClientResponseException e) {
             log.error("Ошибка при удалении записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
             return false;
-        } catch (Exception e) {
-            log.error("Ошибка при удалении записи", e);
-            return false;
         }
     }
+
+
 }
 
 

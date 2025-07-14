@@ -55,31 +55,33 @@ public class SlotCallbackHandler implements CallbackHandler{
                 String staffName = yclientsService.getStaffName(companyId, staffId);
                 String serviceName = yclientsService.getServiceName(companyId, serviceId);
 
-                bot.getBookingCache().put(chatId, new BookingData(slug, serviceId, staffId, datetime, staffName, serviceName, null, false));
+                BookingData bookingData = new BookingData();
 
-                KeyboardButton contactButton = new KeyboardButton("📱 Отправить номер");
-                contactButton.setRequestContact(true);
+                bookingData.setSlug(slug);
+                bookingData.setServiceId(serviceId);
+                bookingData.setStaffId(staffId);
+                bookingData.setDatetime(datetime);
+                bookingData.setStaffName(staffName);
+                bookingData.setServiceName(serviceName);
+                bookingData.setPhone(null);
+                bookingData.setAwaitingCode(false);
+                bookingData.setRecordId(null);
+                bookingData.setRecordHash(null);
+                bookingData.setFullName(null);
 
-                KeyboardRow row = new KeyboardRow();
-                row.add(contactButton);
+// ЗАСТАВЛЯЕМ СНАЧАЛА ВВЕСТИ ИМЯ
+                bookingData.setAwaitingFullName(true);
 
-                ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup(List.of(row));
-                markup.setResizeKeyboard(true);
-                markup.setOneTimeKeyboard(true);
+                bot.getBookingCache().put(chatId, bookingData);
 
-                String confirmText = """
-                        ✅ Вы выбрали:
-                        • Дата и время: %s
-                        • Мастер: %s
-                        • Услуга: %s
-
-                        Пожалуйста, отправьте номер телефона для подтверждения записи.
-                        """.formatted(datetime, staffName, serviceName);
-
+// Отправляем сообщение с просьбой ввести имя
                 SendMessage message = SendMessage.builder()
                         .chatId(chatId.toString())
-                        .text(confirmText)
-                        .replyMarkup(markup)
+                        .text("✅ Вы выбрали:\n" +
+                                "• Дата и время: " + datetime + "\n" +
+                                "• Мастер: " + staffName + "\n" +
+                                "• Услуга: " + serviceName + "\n\n" +
+                                "Пожалуйста, введите своё имя.")
                         .build();
 
                 try {
