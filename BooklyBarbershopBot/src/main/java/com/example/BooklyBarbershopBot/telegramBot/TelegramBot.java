@@ -2,12 +2,12 @@ package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
 import com.example.BooklyBarbershopBot.dto.BookingData;
-import com.example.BooklyBarbershopBot.dto.RecordInfo;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
+import com.example.BooklyBarbershopBot.service.BookingStorageService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import jakarta.annotation.PostConstruct;
@@ -62,7 +62,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Getter
     private final Map<Long, BookingData> bookingCache = new ConcurrentHashMap<>();
     //временное хранилище
-    private final Map<Long, RecordInfo> recordCache = new ConcurrentHashMap<>();
+//    private final Map<Long, RecordInfo> recordCache = new ConcurrentHashMap<>();
+    private final BookingStorageService bookingStorage;
 
     //Сервисы для хранения данных клиентов и записей
     private final ClientService clientService;
@@ -240,7 +241,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void saveRecordInfo(Long chatId, Long recordId, String recordHash) {
         // Например, сохранить в мапу или базу
         log.info("💾 Сохраняем запись: chatId={}, recordId={}, recordHash={}", chatId, recordId, recordHash);
-        recordCache.put(chatId, new RecordInfo(recordId, recordHash));
+        bookingStorage.save(chatId, recordId, recordHash);
     }
 
 
