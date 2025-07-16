@@ -67,4 +67,11 @@ public class Barbershop {
     @Column(name = "yclients_company_id", nullable = false)
     private String yclientsCompanyId;
 
+    @Column(columnDefinition = "TEXT")
+    private String aboutText;
+
+    @Column(length = 500)
+    private String reviewsUrl;
+
+
 }

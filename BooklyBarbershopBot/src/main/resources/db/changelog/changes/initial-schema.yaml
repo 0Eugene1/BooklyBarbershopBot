@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: Eugene
+      comment: "Фиксация текущей структуры, ничего не меняем"
+      changes:
+        - sql: SELECT 1;
