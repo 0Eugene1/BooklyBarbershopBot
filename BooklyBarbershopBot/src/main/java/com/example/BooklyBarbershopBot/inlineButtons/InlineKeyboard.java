@@ -31,6 +31,13 @@ public class InlineKeyboard {
                         .build()
         ));
 
+        rows.add(List.of(
+                InlineKeyboardButton.builder()
+                        .text("❌ Отмена")
+                        .callbackData("cancel_" + slug)
+                        .build()
+        ));
+
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 }
