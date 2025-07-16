@@ -13,6 +13,8 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -64,12 +66,24 @@ public class ServiceCallbackHandler implements CallbackHandler {
                     }
 
                     List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                    for (String date : response.getData().getBookingDates()) {
+                    List<InlineKeyboardButton> currentRow = new ArrayList<>();
+
+                    for (int i = 0; i < response.getData().getBookingDates().size(); i++) {
+                        String isoDate = response.getData().getBookingDates().get(i);
+                        String formatted = formatDate(isoDate);
+
                         InlineKeyboardButton button = new InlineKeyboardButton();
-                        button.setText(date);
-                        button.setCallbackData("date_" + date + "_" + staffId + "_" + serviceId + "_" + slug);
-                        rows.add(Collections.singletonList(button));
+                        button.setText(formatted);
+                        button.setCallbackData("date_" + isoDate + "_" + staffId + "_" + serviceId + "_" + slug);
+
+                        currentRow.add(button);
+
+                        if (currentRow.size() == 3 || i == response.getData().getBookingDates().size() - 1) {
+                            rows.add(new ArrayList<>(currentRow));
+                            currentRow.clear();
+                        }
                     }
+
 
                     InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
                     keyboard.setKeyboard(rows);
@@ -92,6 +106,13 @@ public class ServiceCallbackHandler implements CallbackHandler {
             sendMessage(bot, chatId, "❌ Произошла ошибка.");
         }
     }
+
+    private String formatDate(String isoDate) {
+        LocalDate date = LocalDate.parse(isoDate); // "2025-07-29"
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        return date.format(formatter);              // → "29.07.2025"
+    }
+
 
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {

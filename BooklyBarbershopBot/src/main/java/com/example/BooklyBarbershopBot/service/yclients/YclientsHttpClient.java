@@ -117,4 +117,16 @@ public class YclientsHttpClient {
                 .block();
     }
 
+    //Метод для переноса записи
+    public String putRescheduleBooking(Long companyId, Long recordId, Map<String, Object> requestBody) {
+        return webClient.put()
+                .uri("/book_record/{companyId}/{recordId}", companyId, recordId)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(response -> log.info("📤 Ответ на перенос записи: {}", response))
+                .block();
+    }
+
+
 }

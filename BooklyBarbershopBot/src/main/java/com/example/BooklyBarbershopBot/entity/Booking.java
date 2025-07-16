@@ -25,4 +25,12 @@ public class Booking {
 
     @ManyToOne
     private Client client;
+
+    private Long recordId;      // ID записи в Yclients
+    private String recordHash;  // Hash для управления записью
+
+    private String status;      // PENDING, CONFIRMED, CANCELLED
+
+    private Long staffId;
+    private Long serviceId;
 }

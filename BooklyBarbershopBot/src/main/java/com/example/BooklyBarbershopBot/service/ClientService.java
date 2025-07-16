@@ -48,4 +48,8 @@ public class ClientService {
             return clientRepository.save(newClient);
         }
     }
+
+    public Optional<Client> findByTelegramId(Long telegramId) {
+        return clientRepository.findByTelegramId(telegramId);
+    }
 }

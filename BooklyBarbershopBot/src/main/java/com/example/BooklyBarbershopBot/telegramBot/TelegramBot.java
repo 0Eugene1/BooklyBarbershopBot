@@ -1,13 +1,14 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
-import com.example.BooklyBarbershopBot.service.BookingStorageService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import jakarta.annotation.PostConstruct;
@@ -27,6 +28,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -50,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TelegramBot extends TelegramLongPollingBot {
+public class TelegramBot extends TelegramLongPollingBot implements MessageSender {
 
     /**
      * Сервис для работы с данными барбершопов.
@@ -61,14 +63,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final YclientsService yclientsService;
     @Getter
     private final Map<Long, BookingData> bookingCache = new ConcurrentHashMap<>();
-    //временное хранилище
-//    private final Map<Long, RecordInfo> recordCache = new ConcurrentHashMap<>();
-    private final BookingStorageService bookingStorage;
 
     //Сервисы для хранения данных клиентов и записей
     private final ClientService clientService;
     private final BookingService bookingService;
-
 
     @PostConstruct
     public void initCallbackLink() {
@@ -84,11 +82,24 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public String getBotUsername() {
         return botUsername;
-        }
+    }
 
     @Override
     public String getBotToken() {
         return botToken;
+    }
+
+    @Override
+    public void sendMessage(Long chatId, String text) {
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId.toString())
+                .text(text)
+                .build();
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("Ошибка при отправке сообщения", e);
+        }
     }
 
     /**
@@ -141,15 +152,27 @@ public class TelegramBot extends TelegramLongPollingBot {
                 // Если ожидаем ввод SMS-кода (код подтверждения из SMS)
                 if (data.isAwaitingCode() && text != null) {
                     Client client = clientService.saveOrGetClient(data.getPhone(), chatId, data.getFullName(), "no-reply@example.com");
+                    Optional<Booking> optionalBooking = bookingService.getActiveBooking(client);
+
+                    if (optionalBooking.isEmpty()) {
+                        sendMessage(chatId, "❌ Нет активной записи для подтверждения.");
+                        return;
+                    }
+
+                    Booking booking = optionalBooking.get();
+
                     try {
                         log.info("Клиент fullname: {}", client.getFullName());
                         boolean success = yclientsService.createBooking(data, client, text); // с SMS-кодом
 
                         if (success) {
-                            saveRecordInfo(chatId, data.getRecordId(), data.getRecordHash());
-                            bookingService.saveBooking(client, data);
+                            saveRecordInfo(chatId, data.getRecordId(), data.getRecordHash()); // ✅
+                            booking.setRecordId(data.getRecordId());
+                            booking.setRecordHash(data.getRecordHash());
+                            booking.setStatus("CONFIRMED");
+                            bookingService.saveBooking(client, data); // или bookingService.updateBookingStatus(booking, "CONFIRMED");
+
                             sendMessage(chatId, "✅ Запись подтверждена!");
-                            bookingCache.remove(chatId);
                         } else {
                             sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код.");
                         }
@@ -160,30 +183,28 @@ public class TelegramBot extends TelegramLongPollingBot {
                     return;
                 }
 
+
                 // Обработка контакта (номер телефона)
                 if (message.hasContact()) {
                     String phone = message.getContact().getPhoneNumber();
                     data.setPhone(phone);
 
                     Client client = clientService.saveOrGetClient(phone, chatId, data.getFullName(), "no-reply@example.com");
-                    bookingCache.put(chatId, data);
-
 
                     try {
                         log.info("Клиент fullname: {}", client.getFullName());
-                        boolean success = yclientsService.createBooking(data, client, null); // без SMS-кода
+                        boolean success = yclientsService.createBooking(data, client, null);
 
                         if (success) {
-                            saveRecordInfo(chatId, data.getRecordId(), data.getRecordHash());
+                            // recordId и recordHash уже в data
                             bookingService.saveBooking(client, data);
                             sendMessage(chatId, "✅ Запись успешно создана! Мы ждём вас в указанное время.");
-                            bookingCache.remove(chatId);
                         } else {
                             sendMessage(chatId, "❌ Не удалось создать запись. Попробуйте позже.");
                         }
                     } catch (YclientsSmsConfirmationException e) {
                         data.setAwaitingCode(true);
-                        bookingCache.put(chatId, data);
+                        // Можно хранить в сессии/кэше, но лучше сделать отдельное поле или таблицу для временных ожиданий
                         sendMessage(chatId, "🔐 Ваш номер требует подтверждения. Пожалуйста, введите код из SMS.");
                     } catch (Exception e) {
                         log.error("Ошибка при создании брони", e);
@@ -191,6 +212,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     return;
                 }
+
 
                 // Если имя еще не заполнено (на всякий случай, если ты хочешь, чтобы бот сам запросил)
                 if ((data.getFullName() == null || data.getFullName().isEmpty()) && !data.isAwaitingFullName()) {
@@ -239,9 +261,33 @@ public class TelegramBot extends TelegramLongPollingBot {
 
 
     private void saveRecordInfo(Long chatId, Long recordId, String recordHash) {
-        // Например, сохранить в мапу или базу
-        log.info("💾 Сохраняем запись: chatId={}, recordId={}, recordHash={}", chatId, recordId, recordHash);
-        bookingStorage.save(chatId, recordId, recordHash);
+        // Найти клиента по chatId (telegramId)
+        Optional<Client> optionalClient = clientService.findByTelegramId(chatId);
+        if (optionalClient.isEmpty()) {
+            log.warn("Клиент с chatId={} не найден при сохранении записи", chatId);
+            return;
+        }
+        Client client = optionalClient.get();
+
+        // Найти активную запись (например, с статусом PENDING или CREATED)
+        Optional<Booking> optionalBooking = bookingService.getActiveBooking(client);
+        if (optionalBooking.isEmpty()) {
+            log.warn("Активная запись не найдена для клиента с chatId={}", chatId);
+            return;
+        }
+
+        Booking booking = optionalBooking.get();
+
+        // Обновить recordId и recordHash
+        booking.setRecordId(recordId);
+        booking.setRecordHash(recordHash);
+
+        // Можно также обновить статус, если нужно, например на CONFIRMED
+        booking.setStatus("PENDING");
+
+        bookingService.saveBooking(booking); // или метод обновления записи
+
+        log.info("💾 Сохранил запись для клиента chatId={}, recordId={}, recordHash={}", chatId, recordId, recordHash);
     }
 
 
@@ -263,20 +309,20 @@ public class TelegramBot extends TelegramLongPollingBot {
 
 
     /**
-         * Обрабатывает текстовое сообщение пользователя.
-         * <p>
-         * Если сообщение начинается с команды <code>/start</code> и содержит параметр (slug барбершопа),
-         * бот пытается найти соответствующий барбершоп через {@link BarbershopService}.
-         * <ul>
-         * <li>Если барбершоп найден — отправляет приветственное сообщение с названием и приветствием барбершопа.</li>
-         * <li>Если не найден — отправляет сообщение об ошибке.</li>
-         * </ul>
-         * Если параметр отсутствует, бот просит пользователя уточнить ссылку.
-         * <p>
-         * Все сообщения отправляются в чат пользователя, который инициировал диалог.
-         *
-         * @param message входящее сообщение от пользователя
-         */
+     * Обрабатывает текстовое сообщение пользователя.
+     * <p>
+     * Если сообщение начинается с команды <code>/start</code> и содержит параметр (slug барбершопа),
+     * бот пытается найти соответствующий барбершоп через {@link BarbershopService}.
+     * <ul>
+     * <li>Если барбершоп найден — отправляет приветственное сообщение с названием и приветствием барбершопа.</li>
+     * <li>Если не найден — отправляет сообщение об ошибке.</li>
+     * </ul>
+     * Если параметр отсутствует, бот просит пользователя уточнить ссылку.
+     * <p>
+     * Все сообщения отправляются в чат пользователя, который инициировал диалог.
+     *
+     * @param message входящее сообщение от пользователя
+     */
     private void handleTextMessage(Message message) {
         String text = message.getText();
         Long chatId = message.getChatId();
@@ -324,17 +370,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     log.error("Ошибка при приветствии", e);
                 }
             }
-        }
-    }
-    public void sendMessage(Long chatId, String text) {
-        SendMessage message = SendMessage.builder()
-                .chatId(chatId.toString())
-                .text(text)
-                .build();
-        try {
-            this.execute(message);
-        } catch (TelegramApiException e) {
-            log.error("❌ Ошибка при отправке сообщения", e);
         }
     }
 

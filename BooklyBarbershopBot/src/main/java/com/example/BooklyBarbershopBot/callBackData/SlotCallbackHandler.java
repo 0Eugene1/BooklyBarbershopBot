@@ -14,6 +14,8 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Slf4j
@@ -74,11 +76,13 @@ public class SlotCallbackHandler implements CallbackHandler{
 
                 bot.getBookingCache().put(chatId, bookingData);
 
+
+
 // Отправляем сообщение с просьбой ввести имя
                 SendMessage message = SendMessage.builder()
                         .chatId(chatId.toString())
                         .text("✅ Вы выбрали:\n" +
-                                "• Дата и время: " + datetime + "\n" +
+                                "• Дата и время: " + formatUserFriendlyDatetime(datetime) + "\n" +
                                 "• Мастер: " + staffName + "\n" +
                                 "• Услуга: " + serviceName + "\n\n" +
                                 "Пожалуйста, введите своё имя.")
@@ -97,6 +101,11 @@ public class SlotCallbackHandler implements CallbackHandler{
         }
     }
 
+    public String formatUserFriendlyDatetime(String isoDatetime) {
+        LocalDateTime dateTime = LocalDateTime.parse(isoDatetime); // парсим ISO-строку
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        return dateTime.format(formatter); // форматируем в нужный вид
+    }
     private String restoreIsoDatetime(String safeDatetime) {
         String[] parts = safeDatetime.split("_");
         String date = parts[0]; // "2025-07-01"
