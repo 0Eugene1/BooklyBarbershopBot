@@ -15,6 +15,12 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.util.Map;
 
+/**
+ * HTTP клиент для работы с API Yclients.
+ * Использует WebClient для выполнения REST-запросов с авторизацией по токенам партнера и пользователя.
+ * Поддерживает операции получения мастеров, услуг, доступных дат и времени записи, а также бронирование и отмену записи.
+ */
+@SuppressWarnings("deprecation")
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -31,6 +37,9 @@ public class YclientsHttpClient {
     @Value("${yclients.base-url:https://api.yclients.com/api/v1}")
     private String baseUrl;
 
+    /**
+     * Инициализация WebClient с базовым URL и заголовками авторизации.
+     */
     @PostConstruct
     public void init() {
         this.webClient = WebClient.builder()
@@ -40,6 +49,12 @@ public class YclientsHttpClient {
                 .build();
     }
 
+    /**
+     * Получить сырые данные услуг компании.
+     *
+     * @param companyId ID компании Yclients
+     * @return JSON строка с данными услуг
+     */
     public String getServicesRaw(String companyId) {
         return webClient.get()
                 .uri("/company/{companyId}/services", companyId)
@@ -49,6 +64,12 @@ public class YclientsHttpClient {
                 .block();
     }
 
+    /**
+     * Получить сырые данные мастеров компании.
+     *
+     * @param companyId ID компании Yclients
+     * @return JSON строка с данными мастеров
+     */
     public String getStaffRaw(String companyId) {
         return webClient.get()
                 .uri("/book_staff/{companyId}", companyId)
@@ -58,7 +79,17 @@ public class YclientsHttpClient {
                 .block();
     }
 
+    /**
+     * Получить доступные даты для бронирования по параметрам.
+     *
+     * @param companyId ID компании
+     * @param staffId ID мастера
+     * @param serviceId ID услуги
+     * @param partnerToken токен партнёра для авторизации
+     * @return объект с данными о доступных датах
+     */
     public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, Long serviceId, String partnerToken) {
+        this.partnerToken = partnerToken;
         try {
             return webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -67,7 +98,8 @@ public class YclientsHttpClient {
                             .queryParam("service_ids[]", serviceId)
                             .build())
                     .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<ApiResponse<BookDatesData>>() {})
+                    .bodyToMono(new ParameterizedTypeReference<ApiResponse<BookDatesData>>() {
+                    })
                     .doOnNext(response -> log.info("Доступные даты бронирования: {}", response))
                     .block();
         } catch (WebClientResponseException e) {
@@ -76,7 +108,18 @@ public class YclientsHttpClient {
         }
     }
 
+    /**
+     * Получить доступное время для бронирования.
+     *
+     * @param companyId ID компании
+     * @param staffId ID мастера
+     * @param date дата в формате yyyy-MM-dd
+     * @param serviceId ID услуги
+     * @param partnerToken токен партнёра для авторизации
+     * @return объект с данными о доступных временных слотах
+     */
     public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId, String partnerToken) {
+        this.partnerToken = partnerToken;
         try {
             return webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -93,6 +136,14 @@ public class YclientsHttpClient {
         }
     }
 
+    /**
+     * Отправить POST-запрос для создания бронирования.
+     *
+     * @param companyId ID компании
+     * @param payload тело запроса с данными бронирования
+     * @param partnerToken токен партнёра для авторизации
+     * @return ответ в виде строки JSON
+     */
     public String postBooking(String companyId, Map<String, Object> payload, String partnerToken) {
         return webClient.post()
                 .uri("/book_record/" + companyId)
@@ -105,7 +156,14 @@ public class YclientsHttpClient {
                 .block();
     }
 
-    //Метод отмены брони
+    /**
+     * Отменить бронирование по URL.
+     *
+     * @param url полный URL для удаления записи
+     * @param partnerToken токен партнёра
+     * @param userToken токен пользователя
+     * @return ответ сервера в виде строки JSON
+     */
     public String deleteBooking(String url, String partnerToken, String userToken) {
         return webClient.delete()
                 .uri(url)
@@ -116,17 +174,4 @@ public class YclientsHttpClient {
                 .bodyToMono(String.class)
                 .block();
     }
-
-    //Метод для переноса записи
-    public String putRescheduleBooking(Long companyId, Long recordId, Map<String, Object> requestBody) {
-        return webClient.put()
-                .uri("/book_record/{companyId}/{recordId}", companyId, recordId)
-                .bodyValue(requestBody)
-                .retrieve()
-                .bodyToMono(String.class)
-                .doOnNext(response -> log.info("📤 Ответ на перенос записи: {}", response))
-                .block();
-    }
-
-
 }

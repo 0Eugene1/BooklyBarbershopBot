@@ -17,19 +17,40 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Обработчик callback-запросов выбора даты для записи.
+ * <p>
+ * Обрабатывает callbackData, начинающиеся с "date_".
+ * Извлекает дату, идентификаторы мастера и услуги, а также slug барбершопа из callbackData.
+ * Запрашивает доступное время записи у Yclients API и отправляет пользователю
+ * клавиатуру с кнопками выбора конкретного времени.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DateCallbackHandler implements CallbackHandler {
+public class DateCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
 
+    /**
+     * Проверяет, начинается ли callbackData с "date_".
+     *
+     * @param data данные callback
+     * @return true, если поддерживает обработку выбора даты
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("date_");
     }
 
+    /**
+     * Обрабатывает callbackQuery, извлекает параметры даты, мастера, услуги и slug,
+     * получает доступные временные слоты через Yclients и отправляет пользователю меню выбора времени.
+     *
+     * @param callbackQuery объект callbackQuery
+     * @param bot экземпляр TelegramBot
+     */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         String data = callbackQuery.getData();
@@ -98,6 +119,13 @@ public class DateCallbackHandler implements CallbackHandler {
         }
     }
 
+    /**
+     * Вспомогательный метод для отправки сообщений пользователю.
+     *
+     * @param bot экземпляр TelegramBot
+     * @param chatId идентификатор чата
+     * @param text текст сообщения
+     */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
             bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());

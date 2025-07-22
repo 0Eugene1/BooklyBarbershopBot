@@ -43,10 +43,4 @@ public class BookingService {
         booking.setStatus(status);
         bookingRepository.save(booking);
     }
-
-    public void deleteBooking(Booking booking) {
-        bookingRepository.delete(booking);
-    }
 }
-
-

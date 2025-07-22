@@ -1,12 +1,12 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
-import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
 import com.example.BooklyBarbershopBot.service.ClientService;
@@ -49,6 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @see BarbershopService
  */
 
+@SuppressWarnings("LoggingSimilarMessage")
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -67,23 +68,22 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
     //Сервисы для хранения данных клиентов и записей
     private final ClientService clientService;
     private final BookingService bookingService;
+    @Value("${telegrambots.bots[0].username}")
+    private String botUsername;
+    @Value("${telegrambots.bots[0].token}")
+    private String botToken;
 
     @PostConstruct
     public void initCallbackLink() {
         handleCallBack.setTelegramBot(this);
     }
 
-    @Value("${telegrambots.bots[0].username}")
-    private String botUsername;
-
-    @Value("${telegrambots.bots[0].token}")
-    private String botToken;
-
     @Override
     public String getBotUsername() {
         return botUsername;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public String getBotToken() {
         return botToken;

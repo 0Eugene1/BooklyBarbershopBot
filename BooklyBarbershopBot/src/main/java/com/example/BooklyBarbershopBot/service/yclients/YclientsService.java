@@ -11,10 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.HashMap;
@@ -22,6 +19,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Сервис для взаимодействия с API Yclients.
+ * Инкапсулирует логику получения мастеров, услуг, доступных дат и времени,
+ * а также создание и отмену бронирований через HTTP клиент.
+ */
+@SuppressWarnings("ALL")
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -31,48 +34,114 @@ public class YclientsService {
     private final YclientsDataService dataService;
     private final BarbershopService barbershopService;
 
+    /**
+     * Токен партнёра для авторизации в Yclients API.
+     * Внедряется из настроек приложения.
+     */
     @Value("${yclients.partner-token}")
     private String partnerToken;
+    /**
+     * Токен пользователя для авторизации в Yclients API.
+     * Внедряется из настроек приложения.
+     */
     @Value("${yclients.user-token}")
     private String userToken;
 
+//
+//    public List<StaffDto> getStaff(String companyId) {
+//        // просто делегируем
+//        return dataService.getStaffList(companyId);
+//    }
 
-    public List<StaffDto> getStaff(String companyId) {
-        // просто делегируем
-        return dataService.getStaffList(companyId);
-    }
-
+    /**
+     * Получить список услуг компании Yclients.
+     *
+     * @param companyId ID компании
+     * @return список DTO услуг
+     */
     public List<ServiceDto> getServices(String companyId) {
         return dataService.getServiceList(companyId);
     }
 
+    /**
+     * Получить имя мастера по ID.
+     *
+     * @param companyId ID компании
+     * @param staffId ID мастера
+     * @return имя мастера или "Неизвестный мастер", если не найден
+     */
     public String getStaffName(String companyId, Long staffId) {
         return dataService.getStaffName(companyId, staffId);
     }
 
+    /**
+     * Получить название услуги по ID.
+     *
+     * @param companyId ID компании
+     * @param serviceId ID услуги
+     * @return название услуги или "Неизвестная услуга", если не найдена
+     */
     public String getServiceName(String companyId, Long serviceId) {
         return dataService.getServiceName(companyId, serviceId);
     }
 
+    /**
+     * Получить доступное время для записи.
+     *
+     * @param companyId ID компании
+     * @param staffId ID мастера
+     * @param date дата в формате yyyy-MM-dd
+     * @param serviceId ID услуги
+     * @return объект с доступным временем записи
+     */
     public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId) {
         return httpClient.getAvailableTimes(companyId, staffId, date, serviceId, partnerToken);
     }
 
+    /**
+     * Получить доступные даты для бронирования.
+     *
+     * @param companyId ID компании
+     * @param staffId ID мастера
+     * @param serviceId ID услуги
+     * @return ApiResponse с данными доступных дат
+     */
     public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, Long serviceId) {
         return httpClient.getAvailableBookingDates(companyId, staffId, serviceId, partnerToken);
     }
 
+    /**
+     * Получить сырые JSON данные мастеров (необработанные).
+     *
+     * @param companyId ID компании
+     * @return JSON строка с данными мастеров
+     */
     public String getStaffRawJson(String companyId) {
         return httpClient.getStaffRaw(companyId);
     }
 
+    /**
+     * Получить сырые JSON данные услуг (необработанные).
+     *
+     * @param companyId ID компании
+     * @return JSON строка с данными услуг
+     */
     public String getServicesRawJson(String companyId) {
         return httpClient.getServicesRaw(companyId);
     }
 
-
+    /**
+     * Создать бронирование записи в Yclients.
+     * Если для подтверждения требуется SMS-код, бросает YclientsSmsConfirmationException.
+     *
+     * @param data данные для бронирования
+     * @param client клиент, делающий бронирование
+     * @param smsCode код подтверждения из SMS, если есть
+     * @return true, если бронирование успешно создано
+     * @throws JsonProcessingException при ошибках парсинга ответа
+     * @throws YclientsSmsConfirmationException если требуется подтверждение SMS-кодом
+     */
     // Получение дат и времени можно оставить здесь, либо тоже делегировать, если хочется
-
     public boolean createBooking(BookingData data, Client client, String smsCode) throws JsonProcessingException {
         Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(data.getSlug());
         if (barbershopOpt.isEmpty()) {
@@ -133,8 +202,13 @@ public class YclientsService {
         }
     }
 
-
-
+    /**
+     * Отменить бронирование записи в Yclients.
+     *
+     * @param recordId ID записи
+     * @param recordHash hash записи для управления
+     * @return true, если отмена прошла успешно
+     */
     //Метод удаления
     public boolean cancelBooking(Long recordId, String recordHash) {
         try {
@@ -147,40 +221,4 @@ public class YclientsService {
             return false;
         }
     }
-
 }
-
-
-
-
-
-
-
-
-
-//    //Метод получения одной категории услуг
-//    public CategoryDto getCategory(String companyId, String categoryId) {
-//        String json = webClient.get()
-//                .uri("/company/{companyId}/service_categories", companyId, categoryId)
-//                .retrieve()
-//                .bodyToMono(String.class)
-//                .doOnNext(body -> log.info("Категория {}: {}", categoryId, body))
-//                .block();
-//
-//        try {
-//            ObjectMapper mapper = new ObjectMapper();
-//            return mapper.readValue(json, CategoryDto.class);
-//        } catch (Exception e) {
-//            log.error("Ошибка при парсинге категории {}", categoryId, e);
-//            return null;
-//        }
-//    }
-//
-//    //computeIfAbsent вызовет getCategory() только один раз на категорию.
-//    public String getCategoryNameCached(String companyId, String categoryId) {
-//        return categoryCache.computeIfAbsent(categoryId, id -> {
-//            CategoryDto dto = getCategory(companyId, id);
-//            return dto != null ? dto.getTitle() : "Категория " + id;
-//        });
-//    }
-

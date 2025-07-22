@@ -8,18 +8,39 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 
+/**
+ * Обработчик callback-запросов для оставления отзывов.
+ * <p>
+ * Поддерживает callbackData, начинающиеся с "feedback_".
+ * Получает slug барбершопа из callbackData, ищет в базе соответствующий барбершоп
+ * и отправляет пользователю ссылку для оставления отзыва.
+ * Если ссылка на отзывы отсутствует или барбершоп не найден — сообщает об этом пользователю.
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public class ReviewCallbackHandler implements CallbackHandler {
+public class ReviewCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
 
+    /**
+     * Проверяет, начинается ли callbackData с "feedback_".
+     *
+     * @param data данные callback
+     * @return true, если поддерживается обработка запроса на отзыв
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("feedback_");
     }
 
+    /**
+     * Обрабатывает callbackQuery, извлекает slug барбершопа,
+     * отправляет пользователю ссылку для оставления отзыва.
+     *
+     * @param callbackQuery объект callbackQuery
+     * @param bot экземпляр TelegramBot
+     */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         log.info("Review callback data: {}", callbackQuery.getData());
@@ -42,6 +63,13 @@ public class ReviewCallbackHandler implements CallbackHandler {
         }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
     }
 
+    /**
+     * Вспомогательный метод для отправки сообщений пользователю.
+     *
+     * @param bot экземпляр TelegramBot
+     * @param chatId идентификатор чата
+     * @param text текст сообщения
+     */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
             bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
@@ -49,6 +77,4 @@ public class ReviewCallbackHandler implements CallbackHandler {
             log.error("Ошибка при отправке сообщения", e);
         }
     }
-
 }
-

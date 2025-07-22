@@ -16,22 +16,42 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
+/**
+ * Обработчик callback-запросов для выбора услуги.
+ * <p>
+ * Поддерживает callbackData, начинающиеся с "service_".
+ * Извлекает serviceId, staffId и slug барбершопа из callbackData,
+ * запрашивает доступные даты записи через Yclients API и отображает их в виде клавиатуры.
+ * Если даты отсутствуют или барбершоп не найден — отправляет соответствующее сообщение.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ServiceCallbackHandler implements CallbackHandler {
+public class ServiceCallBackHandler implements CallBackHandler {
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
 
+    /**
+     * Проверяет, начинается ли callbackData с "service_".
+     *
+     * @param data данные callback
+     * @return true, если поддерживается обработка выбора услуги
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("service_");
     }
 
 
+    /**
+     * Обрабатывает callbackQuery, извлекает идентификаторы услуги, мастера и slug,
+     * запрашивает доступные даты для записи и отправляет пользователю клавиатуру с этими датами.
+     *
+     * @param callbackQuery объект callbackQuery
+     * @param bot экземпляр TelegramBot
+     */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         String data = callbackQuery.getData();
@@ -107,13 +127,25 @@ public class ServiceCallbackHandler implements CallbackHandler {
         }
     }
 
+    /**
+     * Форматирует дату из ISO формата (yyyy-MM-dd) в dd.MM.yyyy.
+     *
+     * @param isoDate дата в формате ISO
+     * @return отформатированная дата
+     */
     private String formatDate(String isoDate) {
         LocalDate date = LocalDate.parse(isoDate); // "2025-07-29"
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
         return date.format(formatter);              // → "29.07.2025"
     }
 
-
+    /**
+     * Вспомогательный метод для отправки сообщения пользователю.
+     *
+     * @param bot экземпляр TelegramBot
+     * @param chatId идентификатор чата
+     * @param text текст сообщения
+     */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
             bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());

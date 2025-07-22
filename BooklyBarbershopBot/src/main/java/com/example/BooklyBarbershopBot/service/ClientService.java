@@ -7,11 +7,26 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+/**
+ * Сервис для работы с сущностью Client.
+ * Отвечает за создание новых клиентов и обновление существующих,
+ * а также поиск клиента по Telegram ID.
+ */
 @Service
 @RequiredArgsConstructor
 public class ClientService {
     private final ClientRepository clientRepository;
 
+    /**
+     * Создает нового клиента или возвращает существующего по номеру телефона.
+     * Если клиент уже есть, обновляет отсутствующие данные: полное имя, email, telegramId.
+     *
+     * @param phone номер телефона клиента (используется как уникальный идентификатор)
+     * @param telegramId ID Telegram пользователя (может быть null)
+     * @param fullName полное имя клиента (может быть null)
+     * @param email email клиента (может быть null)
+     * @return сохраненный или найденный клиент
+     */
     public Client saveOrGetClient(String phone, Long telegramId, String fullName, String email) {
 
         Optional<Client> existingClientOpt = clientRepository.findByPhone(phone);
@@ -49,6 +64,12 @@ public class ClientService {
         }
     }
 
+    /**
+     * Найти клиента по Telegram ID.
+     *
+     * @param telegramId ID Telegram пользователя
+     * @return Optional с клиентом, если найден
+     */
     public Optional<Client> findByTelegramId(Long telegramId) {
         return clientRepository.findByTelegramId(telegramId);
     }

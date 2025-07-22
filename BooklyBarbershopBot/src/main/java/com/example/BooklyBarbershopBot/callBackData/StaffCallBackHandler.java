@@ -16,21 +16,40 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Обработчик callback-запросов для выбора мастера.
+ * <p>
+ * Поддерживает callbackData, начинающиеся с "staff_".
+ * Загружает услуги, доступные выбранному мастеру, и формирует клавиатуру
+ * с кнопками услуг для дальнейшего выбора.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class StaffCallbackHandler implements CallbackHandler{
+public class StaffCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final ParsingDtoService parsingDtoService;
 
+    /**
+     * Проверяет, начинается ли callbackData с "staff_".
+     *
+     * @param data данные callback
+     * @return true, если поддерживается обработка выбора мастера
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("staff_");
     }
 
+    /**
+     * Обрабатывает callbackQuery, извлекает ID мастера и slug барбершопа,
+     * получает список услуг мастера и отправляет пользователю клавиатуру с услугами.
+     *
+     * @param callbackQuery объект callbackQuery
+     * @param bot экземпляр TelegramBot
+     */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         String data = callbackQuery.getData();
@@ -56,9 +75,7 @@ public class StaffCallbackHandler implements CallbackHandler{
                             .filter(s -> {
                                 List<StaffDto> staffList = s.getStaff();
                                 return staffList != null && staffList.stream().anyMatch(staff -> staff.getId() == staffId);
-                            })
-                            .filter(s -> s.getTitle() != null && !s.getTitle().isBlank())
-                            .collect(Collectors.toList());
+                            }).toList();
 
                     if (staffServices.isEmpty()) {
                         sendMessage(bot, chatId, "🔍 У этого мастера пока нет доступных услуг.");
@@ -96,6 +113,13 @@ public class StaffCallbackHandler implements CallbackHandler{
         }
     }
 
+    /**
+     * Вспомогательный метод для отправки сообщения пользователю.
+     *
+     * @param bot экземпляр TelegramBot
+     * @param chatId идентификатор чата
+     * @param text текст сообщения
+     */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
             bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());

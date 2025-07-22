@@ -5,14 +5,22 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
+/**
+ * Компонент для создания inline-клавиатуры с основными кнопками меню.
+ */
 @Component
 public class InlineKeyboard {
 
+    /**
+     * Создает inline-клавиатуру с кнопками для основного меню барбершопа.
+     *
+     * @param slug уникальный идентификатор барбершопа для callbackData
+     * @return InlineKeyboardMarkup с кнопками: Записаться, О нас, Оставить отзыв, Отмена
+     */
     public InlineKeyboardMarkup createMenuInlineKeyboard(String slug) {
-        List<List<InlineKeyboardButton>>  rows = new ArrayList<>();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         rows.add(List.of(
                 InlineKeyboardButton.builder()
