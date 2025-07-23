@@ -122,7 +122,7 @@ public class CancelCallBackHandler implements CallBackHandler {
             rows.add(List.of(
                     InlineKeyboardButton.builder()
                             .text(service.getTitle())
-                            .callbackData("select_service_" + service.getId() + "_" + slug)
+                            .callbackData("service_" + service.getId() + "_0_" + slug)
                             .build()
             ));
         }
