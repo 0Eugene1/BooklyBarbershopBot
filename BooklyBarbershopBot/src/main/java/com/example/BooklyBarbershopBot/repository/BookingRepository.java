@@ -20,7 +20,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
      * @param client клиент, для которого ищем записи
      * @return список записей клиента
      */
-    List<Booking> findByClient(Client client);
 
     /**
      * Найти последнюю (по убыванию ID) активную запись (по статусу) для клиента.

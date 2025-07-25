@@ -1,6 +1,7 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
+import com.example.BooklyBarbershopBot.dto.StaffDto;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
@@ -20,6 +21,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Обработчик callback-запросов для отмены записи.
@@ -82,7 +84,7 @@ public class CancelCallBackHandler implements CallBackHandler {
 
             log.info("Запись отменена, отправляем меню выбора услуг, slug: {}", booking.getSlug());
             //Предложить выбрать услугу для новой записи
-            sendServiceSelectionMenu(bot, chatId, booking.getSlug());
+            sendStaffSelectionMenu(bot, chatId, booking.getSlug());
         } else {
             sendMessage(bot, chatId, "❌ Не удалось отменить запись. Попробуйте позже.");
             log.error("Не удалось отменить запись recordId: {}", booking.getRecordId());
@@ -96,49 +98,86 @@ public class CancelCallBackHandler implements CallBackHandler {
      * @param chatId идентификатор чата
      * @param slug уникальный идентификатор барбершопа
      */
-    private void sendServiceSelectionMenu(TelegramBot bot, Long chatId, String slug) {
+    private void sendStaffSelectionMenu(TelegramBot bot, Long chatId, String slug) {
 
-        String companyId = barbershopService.getBySlug(slug)
-                .map(Barbershop::getYclientsCompanyId)
-                .orElse(null);
-        log.error("Получаем компанию по slug: {}", slug);
+        barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
+            String companyId = barbershop.getYclientsCompanyId();
 
-        if (companyId == null) {
-            sendMessage(bot, chatId, "❌ Барбершоп не найден.");
-            return;
-        }
+            List<StaffDto> staffList = yclientsService.getStaff(companyId);
+            if (staffList == null || staffList.isEmpty()) {
+                sendMessage(bot, chatId, "⚠️ Нет доступных мастеров.");
+                return;
+            }
 
-        //метод чтобы Получить список услуг для барбершопа
-        List<ServiceDto> services = yclientsService.getServices(companyId);
-        log.info("Услуги для компании {}: {}", companyId, services);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            for (StaffDto staff : staffList) {
+                rows.add(List.of(
+                        InlineKeyboardButton.builder()
+                                .text(staff.getName())
+                                .callbackData("staff_" + staff.getId() + "_" + slug)
+                                .build()
+                ));
+            }
 
-        if (services == null || services.isEmpty()) {
-            sendMessage(bot, chatId, "⚠️ Нет доступных услуг для записи.");
-            return;
-        }
+            SendMessage msg = SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text("👨‍🔧 Выберите мастера:")
+                    .replyMarkup(InlineKeyboardMarkup.builder().keyboard(rows).build())
+                    .build();
 
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (ServiceDto service : services) {
-            rows.add(List.of(
-                    InlineKeyboardButton.builder()
-                            .text(service.getTitle())
-                            .callbackData("service_" + service.getId() + "_0_" + slug)
-                            .build()
-            ));
-        }
-
-        SendMessage msg = SendMessage.builder()
-                .chatId(chatId.toString())
-                .text("📝 Выберите услугу для новой записи:")
-                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(rows).build())
-                .build();
-
-        try {
-            bot.execute(msg);
-        } catch (Exception e) {
-            log.error("Ошибка при отправке меню выбора услуги", e);
-        }
+            try {
+                bot.execute(msg);
+            } catch (Exception e) {
+                log.error("Ошибка при отправке меню мастеров", e);
+            }
+        }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
     }
+
+
+    //TODO TEST!!
+//    private void sendServiceSelectionMenu(TelegramBot bot, Long chatId, String slug) {
+//
+//        String companyId = barbershopService.getBySlug(slug)
+//                .map(Barbershop::getYclientsCompanyId)
+//                .orElse(null);
+//        log.error("Получаем компанию по slug: {}", slug);
+//
+//        if (companyId == null) {
+//            sendMessage(bot, chatId, "❌ Барбершоп не найден.");
+//            return;
+//        }
+//
+//        //метод чтобы Получить список услуг для барбершопа
+//        List<ServiceDto> services = yclientsService.getServices(companyId);
+//        log.info("Услуги для компании {}: {}", companyId, services);
+//
+//        if (services == null || services.isEmpty()) {
+//            sendMessage(bot, chatId, "⚠️ Нет доступных услуг для записи.");
+//            return;
+//        }
+//
+//        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+//        for (ServiceDto service : services) {
+//            rows.add(List.of(
+//                    InlineKeyboardButton.builder()
+//                            .text(service.getTitle())
+//                            .callbackData("service_" + service.getId() + "_0_" + slug)
+//                            .build()
+//            ));
+//        }
+//
+//        SendMessage msg = SendMessage.builder()
+//                .chatId(chatId.toString())
+//                .text("📝 Выберите услугу для новой записи:")
+//                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(rows).build())
+//                .build();
+//
+//        try {
+//            bot.execute(msg);
+//        } catch (Exception e) {
+//            log.error("Ошибка при отправке меню выбора услуги", e);
+//        }
+//    }
 
     /**
      * Вспомогательный метод для отправки сообщений пользователю.

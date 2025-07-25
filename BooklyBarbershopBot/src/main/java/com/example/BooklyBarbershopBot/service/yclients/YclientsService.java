@@ -14,10 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Сервис для взаимодействия с API Yclients.
@@ -47,11 +44,11 @@ public class YclientsService {
     @Value("${yclients.user-token}")
     private String userToken;
 
-//
-//    public List<StaffDto> getStaff(String companyId) {
-//        // просто делегируем
-//        return dataService.getStaffList(companyId);
-//    }
+
+    public List<StaffDto> getStaff(String companyId) {
+        // просто делегируем
+        return dataService.getStaffList(companyId);
+    }
 
     /**
      * Получить список услуг компании Yclients.
