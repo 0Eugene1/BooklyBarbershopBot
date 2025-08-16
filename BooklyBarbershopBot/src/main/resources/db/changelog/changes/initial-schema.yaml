@@ -1,7 +1,121 @@
 databaseChangeLog:
   - changeSet:
-      id: 1
+      id: 1-create-barbershop
       author: Eugene
-      comment: "Фиксация текущей структуры, ничего не меняем"
       changes:
-        - sql: SELECT 1;
+        - createTable:
+            tableName: barbershop
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: telegram_slug
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: greeting
+                  type: varchar(1000)
+              - column:
+                  name: logo_url
+                  type: varchar(255)
+              - column:
+                  name: yclients_company_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 2-create-client
+      author: Eugene
+      changes:
+        - createTable:
+            tableName: client
+            columns:
+              - column:
+                  name: id
+                  type: bigserial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: telegram_id
+                  type: bigint
+              - column:
+                  name: phone
+                  type: varchar(255)
+                  constraints:
+                    unique: true
+              - column:
+                  name: full_name
+                  type: varchar(255)
+              - column:
+                  name: email
+                  type: varchar(255)
+              - column:
+                  name: last_used_slug
+                  type: varchar(255)
+
+  - changeSet:
+      id: 3-create-booking
+      author: Eugene
+      changes:
+        - createTable:
+            tableName: booking
+            columns:
+              - column:
+                  name: id
+                  type: bigserial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: datetime
+                  type: timestamptz
+              - column:
+                  name: staff_name
+                  type: varchar(255)
+              - column:
+                  name: service_name
+                  type: varchar(255)
+              - column:
+                  name: slug
+                  type: varchar(255)
+              - column:
+                  name: client_id
+                  type: bigint
+              - column:
+                  name: record_id
+                  type: bigint
+              - column:
+                  name: record_hash
+                  type: varchar(255)
+              - column:
+                  name: status
+                  type: varchar(50)
+              - column:
+                  name: staff_id
+                  type: bigint
+              - column:
+                  name: service_id
+                  type: bigint
+
+  - changeSet:
+      id: 4-add-foreign-key-booking-client
+      author: Eugene
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: booking
+            baseColumnNames: client_id
+            constraintName: fk_booking_client
+            referencedTableName: client
+            referencedColumnNames: id
+            onDelete: CASCADE

@@ -2,6 +2,7 @@ package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.BookTimeDto;
 import com.example.BooklyBarbershopBot.dto.BookTimeResponse;
+import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
@@ -14,8 +15,10 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * Обработчик callback-запросов выбора даты для записи.
@@ -49,7 +52,7 @@ public class DateCallBackHandler implements CallBackHandler {
      * получает доступные временные слоты через Yclients и отправляет пользователю меню выбора времени.
      *
      * @param callbackQuery объект callbackQuery
-     * @param bot экземпляр TelegramBot
+     * @param bot           экземпляр TelegramBot
      */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
@@ -65,38 +68,47 @@ public class DateCallBackHandler implements CallBackHandler {
 
             String date = parts[1]; // формат: 2025-07-01
             Long staffId = Long.parseLong(parts[2]);
-            Long serviceId = Long.parseLong(parts[3]);
+            String[] serviceIdsStr = parts[3].split(",");
+            List<Long> serviceIds = Arrays.stream(serviceIdsStr)
+                    .map(Long::parseLong)
+                    .collect(Collectors.toList());
+
             String slug = parts[4];
+
+            BookingData bookingData = bot.getBookingCache().get(chatId);
+            if (bookingData == null || bookingData.getServiceIds() == null || bookingData.getServiceIds().isEmpty()) {
+                sendMessage(bot, chatId, "⚠️ Не выбраны услуги для записи.");
+                return;
+            }
 
             barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
                 String companyId = barbershop.getYclientsCompanyId();
                 try {
+                    // Передаем список всех выбранных услуг
                     BookTimeResponse timeResponse =
-                            yclientsService.getAvailableTimes(companyId, staffId, date, serviceId);
+                            yclientsService.getAvailableTimes(companyId, staffId, date, serviceIds);
 
                     if (timeResponse.getData() == null || timeResponse.getData().isEmpty()) {
                         sendMessage(bot, chatId, "⏱ Нет свободного времени на эту дату.");
                         return;
                     }
 
-                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                    for (BookTimeDto slot : timeResponse.getData()) {
-                        InlineKeyboardButton button = new InlineKeyboardButton();
-                        button.setText(slot.getTime());
+                    List<String> timeStrings = timeResponse.getData().stream()
+                            .map(BookTimeDto::getTime)
+                            .collect(Collectors.toList());
 
-                        String safeDatetime = slot.getDatetime().substring(0, 16) // 2025-07-01T17:15
-                                .replace("T", "_")
-                                .replace(":", "-"); // → 2025-07-01_17-15
-
-                        String callbackData = String.format("slot_%s_%d_%d_%s", safeDatetime, staffId, serviceId, slug);
-
+                    List<List<InlineKeyboardButton>> rows = buildKeyboard(timeStrings, 3, (time, index) -> {
+                        BookTimeDto slot = timeResponse.getData().get(index);
+                        String safeDatetime = slot.getDatetime().substring(0, 16).replace("T", "_").replace(":", "-");
+                        String callbackData = String.format("slot_%s_%d_%d_%s", safeDatetime, staffId, serviceIds.get(0), slug);
                         if (callbackData.length() > 64) {
-                            callbackData = String.format("slot_%s_%d_%d", safeDatetime, staffId, serviceId);
+                            callbackData = String.format("slot_%s_%d_%s", safeDatetime, staffId, serviceIds);
                         }
-
-                        button.setCallbackData(callbackData);
-                        rows.add(Collections.singletonList(button));
-                    }
+                        return InlineKeyboardButton.builder()
+                                .text(time)
+                                .callbackData(callbackData)
+                                .build();
+                    });
 
                     InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
                     keyboard.setKeyboard(rows);
@@ -122,9 +134,9 @@ public class DateCallBackHandler implements CallBackHandler {
     /**
      * Вспомогательный метод для отправки сообщений пользователю.
      *
-     * @param bot экземпляр TelegramBot
+     * @param bot    экземпляр TelegramBot
      * @param chatId идентификатор чата
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
@@ -132,5 +144,25 @@ public class DateCallBackHandler implements CallBackHandler {
         } catch (Exception e) {
             log.error("Ошибка при отправке сообщения", e);
         }
+    }
+
+    private <T> List<List<InlineKeyboardButton>> buildKeyboard(
+            List<T> items,
+            int columns,
+            BiFunction<T, Integer, InlineKeyboardButton> buttonMapper) {
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> currentRow = new ArrayList<>();
+
+        for (int i = 0; i < items.size(); i++) {
+            currentRow.add(buttonMapper.apply(items.get(i), i));
+
+            if ((i + 1) % columns == 0 || i == items.size() - 1) {
+                rows.add(new ArrayList<>(currentRow));
+                currentRow.clear();
+            }
+        }
+
+        return rows;
     }
 }

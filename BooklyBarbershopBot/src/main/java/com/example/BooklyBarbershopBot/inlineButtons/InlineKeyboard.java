@@ -42,7 +42,7 @@ public class InlineKeyboard {
 
         rows.add(List.of(
                 InlineKeyboardButton.builder()
-                        .text("❌ Отмена")
+                        .text("❌ Отмена записи")
                         .callbackData("cancel_" + slug)
                         .build()
         ));

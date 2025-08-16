@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.OffsetDateTime;
+
 /**
  * Сущность Booking — представляет запись (бронь) на услугу в барбершопе.
  *
@@ -27,7 +29,8 @@ public class Booking {
     /**
      * Дата и время записи в формате строки (ISO или аналогичном).
      */
-    private String datetime;
+    @Column(name = "datetime", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private OffsetDateTime datetime;
     /**
      * Имя мастера, на которого сделана запись.
      */

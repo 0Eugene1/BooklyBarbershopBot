@@ -26,10 +26,14 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
      * Используется, например, для отмены текущей записи.
      *
      * @param client клиент, для которого ищем запись
-     * @param status статус записи (например, "PENDING", "CONFIRMED")
+     * @param statuses статус записи (например, "PENDING", "CONFIRMED")
      * @return опциональный объект Booking, если найден
      */
     //Для отмены записи по chatId нужно найти последнюю или активную запись в БД.
-    Optional<Booking> findFirstByClientAndStatusOrderByIdDesc(Client client, String status);
+    Optional<Booking> findFirstByClientAndStatusInOrderByIdDesc(Client client, List<String> statuses);
+
+    List<Booking> findAllByClientOrderByIdDesc(Client client);
+
+    Optional<Booking> findByRecordIdAndRecordHash(Long recordId, String recordHash);
 
 }

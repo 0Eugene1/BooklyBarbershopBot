@@ -44,4 +44,6 @@ public class Client {
      * Email клиента.
      */
     private String email;
+
+    private String lastUsedSlug;
 }

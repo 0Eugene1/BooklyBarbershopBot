@@ -1,8 +1,9 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
-import com.example.BooklyBarbershopBot.dto.ApiResponse;
-import com.example.BooklyBarbershopBot.dto.BookDatesData;
+import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.ParsingDtoService;
 import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,8 @@ import java.util.List;
 public class ServiceCallBackHandler implements CallBackHandler {
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
+    private final ParsingDtoService parsingDtoService;
+
 
     /**
      * Проверяет, начинается ли callbackData с "service_".
@@ -50,12 +53,13 @@ public class ServiceCallBackHandler implements CallBackHandler {
      * запрашивает доступные даты для записи и отправляет пользователю клавиатуру с этими датами.
      *
      * @param callbackQuery объект callbackQuery
-     * @param bot экземпляр TelegramBot
+     * @param bot           экземпляр TelegramBot
      */
+
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
-        String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
+        String data = callbackQuery.getData();
 
         try {
             String[] parts = data.split("_", 4);
@@ -68,64 +72,194 @@ public class ServiceCallBackHandler implements CallBackHandler {
             Long staffId = Long.parseLong(parts[2]);
             String slug = parts[3];
 
+            // Получаем или создаем BookingData
+            BookingData bookingData = bot.getBookingCache().get(chatId);
+            if (bookingData == null || !staffId.equals(bookingData.getStaffId())) {
+                // Если это новый мастер или BookingData отсутствует, создаем новый объект
+                bookingData = new BookingData();
+                bookingData.setServiceIds(new ArrayList<>()); // Инициализируем пустой список услуг
+            }
+            bookingData.setSlug(slug);
+            bookingData.setStaffId(staffId);
+
+            BookingData finalBookingData = bookingData;
             barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
                 String companyId = barbershop.getYclientsCompanyId();
 
                 try {
-                    ApiResponse<BookDatesData> response =
-                            yclientsService.getAvailableBookingDates(companyId, staffId, serviceId);
+                    List<ServiceDto> services = parsingDtoService.getServicesParsed(companyId);
+                    ServiceDto selectedService = services.stream()
+                            .filter(s -> s.getId().equals(serviceId))
+                            .findFirst()
+                            .orElse(null);
 
-                    log.info("➡️ Запрос /book_dates с параметрами: companyId={}, staffId={}, serviceId={}",
-                            companyId, staffId, serviceId);
-
-                    if (response.getData() == null ||
-                            response.getData().getBookingDates() == null ||
-                            response.getData().getBookingDates().isEmpty()) {
-                        sendMessage(bot, chatId, "📅 Нет доступных дат для записи.");
+                    if (selectedService == null) {
+                        sendMessage(bot, chatId, "⚠️ Услуга не найдена.");
                         return;
                     }
 
-                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                    List<InlineKeyboardButton> currentRow = new ArrayList<>();
-
-                    for (int i = 0; i < response.getData().getBookingDates().size(); i++) {
-                        String isoDate = response.getData().getBookingDates().get(i);
-                        String formatted = formatDate(isoDate);
-
-                        InlineKeyboardButton button = new InlineKeyboardButton();
-                        button.setText(formatted);
-                        button.setCallbackData("date_" + isoDate + "_" + staffId + "_" + serviceId + "_" + slug);
-
-                        currentRow.add(button);
-
-                        if (currentRow.size() == 3 || i == response.getData().getBookingDates().size() - 1) {
-                            rows.add(new ArrayList<>(currentRow));
-                            currentRow.clear();
-                        }
+                    // Добавляем serviceId, если его еще нет
+                    if (!finalBookingData.getServiceIds().contains(serviceId)) {
+                        finalBookingData.getServiceIds().add(serviceId);
+                        log.info("Добавлен serviceId={}, текущий список serviceIds: {}", serviceId, finalBookingData.getServiceIds());
+                    } else {
+                        log.info("serviceId={} уже выбран, не добавляем повторно", serviceId);
+                        sendMessage(bot, chatId, "⚠️ Эта услуга уже выбрана. К сожалению, на данный момент нет возможности добавлять одинаковые услуги. Выберите другую или продолжите к выбору даты.");
                     }
 
+                    // Сохраняем обратно в кэш
+                    bot.getBookingCache().put(chatId, finalBookingData);
 
-                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-                    keyboard.setKeyboard(rows);
+                    // Формируем сообщение с выбранными услугами
+                    StringBuilder sb = new StringBuilder("<b>Вы выбрали:</b>\n");
+                    for (Long id : finalBookingData.getServiceIds()) {
+                        services.stream()
+                                .filter(s -> s.getId().equals(id))
+                                .findFirst()
+                                .ifPresent(s -> sb.append("• ").append(s.getTitle()).append("✅").append("\n"));
+                    }
+                    sb.append("\n<b>Выберите действие:</b>");
+
+                    // Формируем кнопки "Добавить ещё услугу" и "Продолжить к выбору даты"
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(
+                            InlineKeyboardButton.builder()
+                                    .text("➕ Добавить ещё услугу")
+                                    .callbackData("choose_service_" + staffId + "_" + slug)
+                                    .build()
+                    ));
+                    rows.add(List.of(
+                            InlineKeyboardButton.builder()
+                                    .text("✅ Продолжить к выбору даты")
+                                    .callbackData("continue_services_" + staffId + "_" + slug)
+                                    .build()
+                    ));
+                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup(rows);
 
                     SendMessage message = SendMessage.builder()
                             .chatId(chatId.toString())
-                            .text("📅 Выберите дату:")
+                            .text(sb.toString())
                             .replyMarkup(keyboard)
+                            .parseMode("HTML")
                             .build();
 
                     bot.execute(message);
+
                 } catch (Exception e) {
-                    log.error("Ошибка при получении дат", e);
-                    sendMessage(bot, chatId, "❌ Не удалось получить даты бронирования.");
+                    log.error("Ошибка при обработке услуги", e);
+                    sendMessage(bot, chatId, "❌ Не удалось обработать выбор услуги.");
                 }
+
             }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
 
         } catch (Exception e) {
-            log.error("Ошибка обработки callback service_", e);
-            sendMessage(bot, chatId, "❌ Произошла ошибка.");
+            log.error("Ошибка в callback service_", e);
+            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
     }
+//    //FIXME TEST 16.08
+//    @Override
+//    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+//        Long chatId = callbackQuery.getMessage().getChatId();
+//        String data = callbackQuery.getData();
+//
+//        try {
+//            String[] parts = data.split("_", 4);
+//            if (parts.length < 4) {
+//                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
+//                return;
+//            }
+//
+//            Long serviceId = Long.parseLong(parts[1]);
+//            Long staffId = Long.parseLong(parts[2]);
+//            String slug = parts[3];
+//
+//            BookingData bookingData = bot.getBookingCache().getOrDefault(chatId, new BookingData());
+//            bookingData.setSlug(slug);
+//            bookingData.setStaffId(staffId);
+//
+//
+//            barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
+//                String companyId = barbershop.getYclientsCompanyId();
+//
+//                try {
+//                    List<ServiceDto> services = parsingDtoService.getServicesParsed(companyId);
+//                    ServiceDto selectedService = services.stream()
+//                            .filter(s -> s.getId().equals(serviceId))
+//                            .findFirst()
+//                            .orElse(null);
+//
+//                    if (selectedService == null) {
+//                        sendMessage(bot, chatId, "⚠️ Услуга не найдена.");
+//                        return;
+//                    }
+//
+//
+//                    bookingData.setStaffId(staffId);
+//                    bookingData.setSlug(slug);
+//
+//                    if (!bookingData.getServiceIds().contains(serviceId)) {
+//                        bookingData.getServiceIds().add(serviceId);
+//                        log.info("Добавлен serviceId={}, текущий список serviceIds: {}", serviceId, bookingData.getServiceIds());
+//                    } else {
+//                        log.info("serviceId={} уже выбран, не добавляем повторно", serviceId);
+//                        sendMessage(bot, chatId, "⚠️ Эта услуга уже выбрана." +
+//                                " К сожалению на данный момент нет возможности добавлять одинаковые услуги." +
+//                                " Выберите другую или продолжите к выбору даты.");
+//                    }
+//
+//
+//                    // Сохраняем обратно в кэш
+//                    bot.getBookingCache().put(chatId, bookingData);
+//
+//                    // Формируем сообщение с выбранными услугами
+//                    StringBuilder sb = new StringBuilder("<b>Вы выбрали:</b>\n");
+//                    for (Long id : bookingData.getServiceIds()) {
+//                        services.stream()
+//                                .filter(s -> s.getId().equals(id))
+//                                .findFirst()
+//                                .ifPresent(s -> sb.append("• ").append(s.getTitle()).append("✅").append("\n"));
+//                    }
+//                    sb.append("\n<b>Выберите действие:</b>");
+//
+//                    // Формируем кнопки "Добавить ещё услугу" и "Продолжить к выбору даты"
+//                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+//                    rows.add(List.of(
+//                            InlineKeyboardButton.builder()
+//                                    .text("➕ Добавить ещё услугу")
+//                                    .callbackData("choose_service_" + staffId + "_" + slug)
+//                                    .build()
+//                    ));
+//                    rows.add(List.of(
+//                            InlineKeyboardButton.builder()
+//                                    .text("✅ Продолжить к выбору даты")
+//                                    .callbackData("continue_services_" + staffId + "_" + slug)
+//                                    .build()
+//                    ));
+//                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup(rows);
+//
+//                    SendMessage message = SendMessage.builder()
+//                            .chatId(chatId.toString())
+//                            .text(sb.toString())
+//                            .replyMarkup(keyboard)
+//                            .parseMode("HTML")
+//                            .build();
+//
+//                    bot.execute(message);
+//
+//                } catch (Exception e) {
+//                    log.error("Ошибка при обработке услуги", e);
+//                    sendMessage(bot, chatId, "❌ Не удалось обработать выбор услуги.");
+//                }
+//
+//            }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
+//
+//        } catch (Exception e) {
+//            log.error("Ошибка в callback service_", e);
+//            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
+//        }
+//    }
+
 
     /**
      * Форматирует дату из ISO формата (yyyy-MM-dd) в dd.MM.yyyy.
@@ -142,15 +276,25 @@ public class ServiceCallBackHandler implements CallBackHandler {
     /**
      * Вспомогательный метод для отправки сообщения пользователю.
      *
-     * @param bot экземпляр TelegramBot
+     * @param bot    экземпляр TelegramBot
      * @param chatId идентификатор чата
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
+    private void sendMessage(TelegramBot bot, Long chatId, String text, InlineKeyboardMarkup keyboard) {
         try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
+            SendMessage.SendMessageBuilder builder = SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text(text);
+            if (keyboard != null) {
+                builder.replyMarkup(keyboard);
+            }
+            bot.execute(builder.build());
         } catch (Exception e) {
             log.error("Ошибка при отправке сообщения", e);
         }
+    }
+
+    private void sendMessage(TelegramBot bot, Long chatId, String text) {
+        sendMessage(bot, chatId, text, null);
     }
 }

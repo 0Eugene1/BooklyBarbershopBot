@@ -61,6 +61,36 @@ public class YclientsDataService {
     }
 
     /**
+     * Получить список мастеров без обновления кэша имен.
+     * Используется, когда нужны актуальные данные прямо из API,
+     * но мы не хотим перезаписывать существующий кэш.
+     */
+    public List<StaffDto> getStaffListFresh(String companyId) {
+        try {
+            String raw = httpClient.getStaffRaw(companyId);
+            log.info("Raw staff data from Yclients: {}", raw);
+            JsonNode root = objectMapper.readTree(raw);
+            JsonNode dataNode = root.get("data");
+            if (dataNode == null || !dataNode.isArray()) {
+                log.warn("Нет данных мастеров в ответе Yclients (fresh)");
+                return Collections.emptyList();
+
+            }
+
+            List<StaffDto> result = new ArrayList<>();
+            for (JsonNode node : dataNode) {
+                StaffDto staff = objectMapper.treeToValue(node, StaffDto.class);
+                result.add(staff);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Ошибка при парсинге мастеров из Yclients (fresh)", e);
+            return Collections.emptyList();
+        }
+    }
+
+
+    /**
      * Получить список услуг (ServiceDto) из Yclients для указанной компании.
      * Результат кэшируется в serviceNamesCache.
      *
@@ -94,7 +124,7 @@ public class YclientsDataService {
      * Получить имя мастера по ID, используя кэш или обновляя его при необходимости.
      *
      * @param companyId идентификатор компании Yclients
-     * @param staffId ID мастера
+     * @param staffId   ID мастера
      * @return имя мастера или "Неизвестный мастер" если не найден
      */
     public String getStaffName(String companyId, Long staffId) {

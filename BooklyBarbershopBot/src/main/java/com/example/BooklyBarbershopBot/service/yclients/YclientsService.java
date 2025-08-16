@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -44,11 +45,14 @@ public class YclientsService {
     @Value("${yclients.user-token}")
     private String userToken;
 
-
     public List<StaffDto> getStaff(String companyId) {
-        // просто делегируем
-        return dataService.getStaffList(companyId);
+        return dataService.getStaffList(companyId); // с обновлением кэша
     }
+
+    public List<StaffDto> getFreshStaff(String companyId) {
+        return dataService.getStaffListFresh(companyId); // без обновления кэша
+    }
+
 
     /**
      * Получить список услуг компании Yclients.
@@ -64,7 +68,7 @@ public class YclientsService {
      * Получить имя мастера по ID.
      *
      * @param companyId ID компании
-     * @param staffId ID мастера
+     * @param staffId   ID мастера
      * @return имя мастера или "Неизвестный мастер", если не найден
      */
     public String getStaffName(String companyId, Long staffId) {
@@ -86,25 +90,35 @@ public class YclientsService {
      * Получить доступное время для записи.
      *
      * @param companyId ID компании
-     * @param staffId ID мастера
-     * @param date дата в формате yyyy-MM-dd
+     * @param staffId   ID мастера
+     * @param date      дата в формате yyyy-MM-dd
      * @param serviceId ID услуги
      * @return объект с доступным временем записи
      */
-    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId) {
-        return httpClient.getAvailableTimes(companyId, staffId, date, serviceId, partnerToken);
+    //FIXME TEST 11.08
+    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, List<Long> serviceIds) {
+        return httpClient.getAvailableTimes(companyId, staffId, date, serviceIds, partnerToken);
     }
+
+//    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId) {
+//        return httpClient.getAvailableTimes(companyId, staffId, date, serviceId, partnerToken);
+//    }
 
     /**
      * Получить доступные даты для бронирования.
      *
      * @param companyId ID компании
-     * @param staffId ID мастера
+     * @param staffId   ID мастера
      * @param serviceId ID услуги
      * @return ApiResponse с данными доступных дат
      */
     public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, Long serviceId) {
-        return httpClient.getAvailableBookingDates(companyId, staffId, serviceId, partnerToken);
+        return httpClient.getAvailableBookingDates(companyId, staffId, Collections.singletonList(serviceId));
+    }
+
+    //FIXME TEST 11.08
+    public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, List<Long> serviceIds) {
+        return httpClient.getAvailableBookingDates(companyId, staffId, serviceIds);
     }
 
     /**
@@ -131,11 +145,11 @@ public class YclientsService {
      * Создать бронирование записи в Yclients.
      * Если для подтверждения требуется SMS-код, бросает YclientsSmsConfirmationException.
      *
-     * @param data данные для бронирования
-     * @param client клиент, делающий бронирование
+     * @param data    данные для бронирования
+     * @param client  клиент, делающий бронирование
      * @param smsCode код подтверждения из SMS, если есть
      * @return true, если бронирование успешно создано
-     * @throws JsonProcessingException при ошибках парсинга ответа
+     * @throws JsonProcessingException          при ошибках парсинга ответа
      * @throws YclientsSmsConfirmationException если требуется подтверждение SMS-кодом
      */
     // Получение дат и времени можно оставить здесь, либо тоже делегировать, если хочется
@@ -145,6 +159,9 @@ public class YclientsService {
             log.warn("Барбершоп с слагом {} не найден", data.getSlug());
             return false;
         }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+        String formattedDatetime = data.getDatetime().format(formatter);
 
         String companyId = barbershopOpt.get().getYclientsCompanyId();
 
@@ -156,11 +173,14 @@ public class YclientsService {
 
         Map<String, Object> appointment = new HashMap<>();
         appointment.put("id", 1);
-        appointment.put("services", List.of(data.getServiceId()));
+        //FIXME TEST 11.08
+        appointment.put("services", data.getServiceIds());
         appointment.put("staff_id", data.getStaffId());
-        appointment.put("datetime", data.getDatetime());
+        appointment.put("datetime", formattedDatetime);
 
         bookingPayload.put("appointments", List.of(appointment));
+        log.info("Создаваемая запись: staffId={}, services={}, datetime={}, fullname={}",
+                data.getStaffId(), data.getServiceIds(), data.getDatetime(), client.getFullName());
 
         if (smsCode != null) {
             bookingPayload.put("code", smsCode);
@@ -202,7 +222,7 @@ public class YclientsService {
     /**
      * Отменить бронирование записи в Yclients.
      *
-     * @param recordId ID записи
+     * @param recordId   ID записи
      * @param recordHash hash записи для управления
      * @return true, если отмена прошла успешно
      */

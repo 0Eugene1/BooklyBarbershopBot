@@ -9,10 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Обработчик callback-запросов для выбора конкретного временного слота записи.
@@ -29,6 +30,7 @@ public class SlotCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     /**
      * Проверяет, начинается ли callbackData с "slot_".
@@ -49,6 +51,9 @@ public class SlotCallBackHandler implements CallBackHandler {
      * @param callbackQuery объект callbackQuery
      * @param bot           экземпляр TelegramBot
      */
+
+
+    //FIXME TEST 11.08
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         String data = callbackQuery.getData();
@@ -64,50 +69,79 @@ public class SlotCallBackHandler implements CallBackHandler {
             String date = parts[1];        // 2025-07-01
             String time = parts[2];        // 17-15
             Long staffId = Long.parseLong(parts[3]);
-            Long serviceId = Long.parseLong(parts[4]);
+
             String slug = parts.length >= 6 ? parts[5] : "";
 
-            String datetime = restoreIsoDatetime(date + "_" + time); // → "2025-07-01T17:15:00"
+            String isoDatetime = restoreIsoDatetime(date + "_" + time); // → "2025-07-01T17:15:00"
+
+            // Исправляем однозначное смещение +3:00 → +03:00
+            String offset = "+3:00";
+            if (offset.matches("[+-]\\d:.*")) {
+                offset = offset.replaceFirst("([+-])(\\d):", "$10$2:");
+            }
+
+            OffsetDateTime offsetDateTime = OffsetDateTime.parse(isoDatetime + offset);
 
             barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
                 String companyId = barbershop.getYclientsCompanyId();
 
-                String staffName = yclientsService.getStaffName(companyId, staffId);
-                String serviceName = yclientsService.getServiceName(companyId, serviceId);
-
-                BookingData bookingData = new BookingData();
+                // Получаем BookingData из кеша, он должен уже содержать выбранные услуги
+                BookingData bookingData = bot.getBookingCache().get(chatId);
+                if (bookingData == null) {
+                    bookingData = new BookingData();
+                }
 
                 bookingData.setSlug(slug);
-                bookingData.setServiceId(serviceId);
                 bookingData.setStaffId(staffId);
-                bookingData.setDatetime(datetime);
-                bookingData.setStaffName(staffName);
-                bookingData.setServiceName(serviceName);
-                bookingData.setPhone(null);
-                bookingData.setAwaitingCode(false);
-                bookingData.setRecordId(null);
-                bookingData.setRecordHash(null);
-                bookingData.setFullName(null);
+                bookingData.setDatetime(offsetDateTime);
+                bookingData.setStaffName(yclientsService.getStaffName(companyId, staffId));
 
-                // ЗАСТАВЛЯЕМ СНАЧАЛА ВВЕСТИ ИМЯ
-                bookingData.setAwaitingFullName(true);
+                // --- новый блок ---
+                if (bookingData.getServiceIds() != null && !bookingData.getServiceIds().isEmpty()) {
+                    List<String> serviceNames = bookingData.getServiceIds().stream()
+                            .map(serviceId -> {
+                                try {
+                                    return yclientsService.getServiceName(companyId, serviceId);
+                                } catch (Exception e) {
+                                    log.warn("Не удалось получить название услуги id={}", serviceId, e);
+                                    return "Неизвестная услуга";
+                                }
+                            })
+                            .toList();
+                    bookingData.setServiceNames(serviceNames);
+                } else {
+                    bookingData.setServiceNames(Collections.emptyList());
+                }
+// --- конец нового блока ---
 
                 bot.getBookingCache().put(chatId, bookingData);
 
+                bookingData.setAwaitingFullName(true);
+                bot.getBookingCache().put(chatId, bookingData);
+//                 --- Создаём новый BookingData для текущей записи ---
 
-                // Отправляем сообщение с просьбой ввести имя
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("<b>✅ Вы выбрали дату и время:</b>\n")
+                        .append("⏰ <i>").append(formatUserFriendlyDatetime(bookingData.getDatetime())).append("</i>\n")
+                        .append("💈 <b>Мастер:</b> ").append(bookingData.getStaffName()).append("\n");
+
+                if (bookingData.getServiceNames() != null && !bookingData.getServiceNames().isEmpty()) {
+                    sb.append("✂️ <b>Услуги:</b> ")
+                            .append(String.join(", ", bookingData.getServiceNames()))
+                            .append("\n")
+                            .append("• • • • • • • • • • • • • •\n")  // лёгкая разделительная линия
+                            .append("Пожалуйста, введите своё имя."); // один раз
+                }
+
                 SendMessage message = SendMessage.builder()
                         .chatId(chatId.toString())
-                        .text("✅ Вы выбрали:\n" +
-                                "• Дата и время: " + formatUserFriendlyDatetime(datetime) + "\n" +
-                                "• Мастер: " + staffName + "\n" +
-                                "• Услуга: " + serviceName + "\n\n" +
-                                "Пожалуйста, введите своё имя.")
+                        .text(sb.toString())
+                        .parseMode("HTML") // важно!
                         .build();
-
                 try {
                     bot.execute(message);
-                } catch (TelegramApiException e) {
+                } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
             }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
@@ -121,13 +155,12 @@ public class SlotCallBackHandler implements CallBackHandler {
     /**
      * Форматирует ISO дату-время в удобочитаемый вид dd/MM/yyyy HH:mm.
      *
-     * @param isoDatetime дата-время в формате ISO
+     * @param datetime дата-время в формате ISO
      * @return форматированная строка
      */
-    public String formatUserFriendlyDatetime(String isoDatetime) {
-        LocalDateTime dateTime = LocalDateTime.parse(isoDatetime); // парсим ISO-строку
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-        return dateTime.format(formatter); // форматируем в нужный вид
+    public String formatUserFriendlyDatetime(OffsetDateTime datetime) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy | HH:mm");
+        return datetime.toLocalDateTime().format(formatter); // форматируем в нужный вид
     }
 
     /**
@@ -146,9 +179,9 @@ public class SlotCallBackHandler implements CallBackHandler {
     /**
      * Вспомогательный метод для отправки сообщения пользователю.
      *
-     * @param bot экземпляр TelegramBot
+     * @param bot    экземпляр TelegramBot
      * @param chatId идентификатор чата
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {

@@ -73,4 +73,21 @@ public class ClientService {
     public Optional<Client> findByTelegramId(Long telegramId) {
         return clientRepository.findByTelegramId(telegramId);
     }
+
+    public void saveOrUpdateLastUsedSlug(Long telegramId, String slug) {
+        findByTelegramId(telegramId).ifPresentOrElse(
+                client -> {
+                    client.setLastUsedSlug(slug);
+                    clientRepository.save(client);
+                },
+                () -> {
+                    Client newClient = Client.builder()
+                            .telegramId(telegramId)
+                            .lastUsedSlug(slug)
+                            .build();
+                    clientRepository.save(newClient);
+                }
+        );
+    }
+
 }
