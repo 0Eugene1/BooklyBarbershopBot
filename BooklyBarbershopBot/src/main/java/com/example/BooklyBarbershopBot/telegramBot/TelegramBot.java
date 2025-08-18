@@ -112,7 +112,7 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
         if (update.hasMessage()) {
             handleMessage(update.getMessage());
         } else if (update.hasCallbackQuery()) {
-            handleCallBack.handelCallback(update.getCallbackQuery());
+            handleCallBack.handleCallback(update.getCallbackQuery());
         }
     }
 
@@ -128,14 +128,59 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
         if (data != null && handleBookingData(chatId, message, data, text)) {
             return; // если обработка BookingData завершена, выходим
         }
-
     }
+
+//    @EventListener
+//    public void handleContextRefreshed(ContextRefreshedEvent event) {
+//        if (isRegistered.compareAndSet(false, true)) {
+//            try {
+//                // Очистка предыдущих сессий
+//                clearPreviousSessions();
+//                // Регистрация бота
+//                TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+//                botsApi.registerBot(this);
+//                log.info("Бот успешно зарегистрирован");
+//            } catch (TelegramApiException e) {
+//                log.error("Ошибка при регистрации бота: {}", e.getMessage());
+//                isRegistered.set(false); // Сбрасываем флаг, чтобы попробовать снова
+//                // Повторная попытка через 10 секунд
+//                new java.util.Timer().schedule(new java.util.TimerTask() {
+//                    @Override
+//                    public void run() {
+//                        handleContextRefreshed(event);
+//                    }
+//                }, 10000);
+//            }
+//        } else {
+//            log.info("Бот уже зарегистрирован, пропускаем повторную регистрацию");
+//        }
+//    }
+//
+//    private void clearPreviousSessions() {
+//        try {
+//            // Очистка вебхуков и предыдущих сессий getUpdates
+//            DeleteWebhook deleteWebhook = new DeleteWebhook();
+//            deleteWebhook.setDropPendingUpdates(true); // Сбрасываем все ожидающие обновления
+//            execute(deleteWebhook);
+//            log.info("Предыдущие сессии getUpdates и webhook очищены");
+//
+//            // Дополнительно отправляем getUpdates с высоким offset, чтобы сбросить очередь
+//            GetUpdates getUpdates = new GetUpdates();
+//            getUpdates.setOffset(Integer.MAX_VALUE);
+//            getUpdates.setLimit(1);
+//            execute(getUpdates);
+//            log.info("Очередь обновлений getUpdates очищена");
+//        } catch (TelegramApiException e) {
+//            log.error("Ошибка при очистке предыдущих сессий: {}", e.getMessage());
+//        }
+//    }
 
     private boolean handleCommands(Long chatId, Message message, String text) {
         if (text.startsWith("/start")) {
             handleTextMessage(message);
             return true;
         }
+
         return switch (text) {
             case "/cancel" -> {
                 handleCancelCommand(chatId);
@@ -318,6 +363,7 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                     } catch (TelegramApiException e) {
                         log.error("Ошибка при отправке сообщения о ненайденном барбершопе для chatId={}", chatId, e);                    }
                 });
+
 
             } else {
                 // Обработка /start без slug

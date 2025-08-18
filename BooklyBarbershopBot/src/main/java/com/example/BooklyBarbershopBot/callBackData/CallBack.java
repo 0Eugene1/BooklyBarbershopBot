@@ -34,15 +34,38 @@ public class CallBack {
      * Делегирует обработку первому обработчику, поддерживающему данные.
      * @param callbackQuery входящий callbackQuery от Telegram
      */
-    public void handelCallback(CallbackQuery callbackQuery) {
+    public void handleCallback(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
+        Long chatId = callbackQuery.getMessage().getChatId();
+
         for (CallBackHandler handler : handlers) {
             if (handler.supports(data)) {
-                handler.handle(callbackQuery, telegramBot);
+                try {
+                    handler.handle(callbackQuery, telegramBot);
+                } catch (Exception e) {
+                    log.error("Ошибка при обработке callbackData={} для chatId={}", data, chatId, e);
+                    try {
+                        telegramBot.execute(SendMessage.builder()
+                                .chatId(chatId.toString())
+                                .text("❌ Произошла ошибка. Попробуйте позже.")
+                                .build());
+                    } catch (Exception ex) {
+                        log.error("Ошибка при отправке сообщения об ошибке для chatId={}", chatId, ex);
+                    }
+                }
                 return;
             }
         }
-        sendMessage(callbackQuery.getMessage().getChatId(), "⚠️ Неизвестная команда.");
+
+        log.warn("Не найден обработчик для callbackData={} и chatId={}", data, chatId);
+        try {
+            telegramBot.execute(SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text("⚠️ Некорректный запрос.")
+                    .build());
+        } catch (Exception e) {
+            log.error("Ошибка при отправке сообщения о некорректном запросе для chatId={}", chatId, e);
+        }
     }
 
     /**

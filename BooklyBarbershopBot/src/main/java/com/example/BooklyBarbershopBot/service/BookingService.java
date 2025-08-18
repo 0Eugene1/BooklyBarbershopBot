@@ -5,12 +5,14 @@ import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class BookingService {
     private final BookingRepository bookingRepository;
@@ -46,6 +48,13 @@ public class BookingService {
     public Optional<Booking> findByRecordIdAndRecordHash(Long recordId, String recordHash) {
         return bookingRepository.findByRecordIdAndRecordHash(recordId, recordHash);
     }
+
+    public List<Booking> findByStatus(String status) {
+        return bookingRepository.findByStatus(status);
+    }
+
+
+
 //    public Booking createBookingFromData(Client client, BookingData data) {
 //        // Например, берём только первый serviceId, если их несколько
 //        Long serviceId = data.getServiceIds().isEmpty() ? null : data.getServiceIds().get(0);

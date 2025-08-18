@@ -1,10 +1,13 @@
 package com.example.BooklyBarbershopBot.service;
 
 import com.example.BooklyBarbershopBot.entity.Client;
+import com.example.BooklyBarbershopBot.repository.BookingRepository;
 import com.example.BooklyBarbershopBot.repository.ClientRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -13,9 +16,11 @@ import java.util.Optional;
  * а также поиск клиента по Telegram ID.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ClientService {
     private final ClientRepository clientRepository;
+    private final BookingRepository bookingRepository;
 
     /**
      * Создает нового клиента или возвращает существующего по номеру телефона.
@@ -28,40 +33,56 @@ public class ClientService {
      * @return сохраненный или найденный клиент
      */
     public Client saveOrGetClient(String phone, Long telegramId, String fullName, String email) {
-
-        Optional<Client> existingClientOpt = clientRepository.findByPhone(phone);
-        if (existingClientOpt.isPresent()) {
-            Client existingClient = existingClientOpt.get();
-
+        // Проверяем по telegram_id сначала
+        Optional<Client> existingByTelegramId = findByTelegramId(telegramId);
+        if (existingByTelegramId.isPresent()) {
+            Client existing = existingByTelegramId.get();
             // Обновляем данные, если нужно
             boolean updated = false;
-            if ((existingClient.getFullName() == null || existingClient.getFullName().isEmpty()) && fullName != null && !fullName.isEmpty()) {
-                existingClient.setFullName(fullName);
+            if (fullName != null && !fullName.isEmpty() && (existing.getFullName() == null || !existing.getFullName().equals(fullName))) {
+                existing.setFullName(fullName);
                 updated = true;
             }
-            if ((existingClient.getEmail() == null || existingClient.getEmail().isEmpty()) && email != null && !email.isEmpty()) {
-                existingClient.setEmail(email);
+            if (phone != null && !phone.isEmpty() && (existing.getPhone() == null || !existing.getPhone().equals(phone))) {
+                existing.setPhone(phone);
                 updated = true;
             }
-            if (existingClient.getTelegramId() == null && telegramId != null) {
-                existingClient.setTelegramId(telegramId);
+            if (email != null && !email.isEmpty() && (existing.getEmail() == null || !existing.getEmail().equals(email))) {
+                existing.setEmail(email);
                 updated = true;
             }
-
             if (updated) {
-                return clientRepository.save(existingClient);
-            } else {
-                return existingClient;
+                return clientRepository.save(existing);
             }
-        } else {
-            Client newClient = Client.builder()
-                    .phone(phone)
-                    .telegramId(telegramId)
-                    .fullName(fullName)
-                    .email(email)
-                    .build();
-            return clientRepository.save(newClient);
+            return existing;
         }
+
+        // Если не найден по telegram_id, проверяем по phone
+        Optional<Client> existingByPhone = clientRepository.findByPhone(phone);
+        if (existingByPhone.isPresent()) {
+            Client existing = existingByPhone.get();
+            // Обновляем данные, включая telegram_id
+            boolean updated = false;
+            if (telegramId != null && (existing.getTelegramId() == null || !existing.getTelegramId().equals(telegramId))) {
+                existing.setTelegramId(telegramId);
+                updated = true;
+            }
+            // ... аналогично обновляем fullName, email
+            if (updated) {
+                return clientRepository.save(existing);
+            }
+            return existing;
+        }
+
+        // Если не найден, создаём нового
+        Client newClient = Client.builder()
+                .telegramId(telegramId)
+                .phone(phone)
+                .fullName(fullName)
+                .email(email)
+                .build();
+        return clientRepository.save(newClient);
+
     }
 
     /**
@@ -71,7 +92,14 @@ public class ClientService {
      * @return Optional с клиентом, если найден
      */
     public Optional<Client> findByTelegramId(Long telegramId) {
-        return clientRepository.findByTelegramId(telegramId);
+        List<Client> clients = clientRepository.findByTelegramId(telegramId);
+        if (clients.isEmpty()) {
+            return Optional.empty();
+        }
+        if (clients.size() > 1) {
+            log.warn("Найдено {} клиентов для telegramId={}. Используется первый.", clients.size(), telegramId);
+        }
+        return Optional.of(clients.get(0));
     }
 
     public void saveOrUpdateLastUsedSlug(Long telegramId, String slug) {
@@ -89,5 +117,4 @@ public class ClientService {
                 }
         );
     }
-
 }

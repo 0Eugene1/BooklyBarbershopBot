@@ -4,6 +4,7 @@ import com.example.BooklyBarbershopBot.entity.Client;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,5 +27,5 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
      * @param telegramId идентификатор пользователя Telegram
      * @return Optional с клиентом, если найден
      */
-    Optional<Client> findByTelegramId(Long telegramId);
+    List<Client> findByTelegramId(Long telegramId);
 }

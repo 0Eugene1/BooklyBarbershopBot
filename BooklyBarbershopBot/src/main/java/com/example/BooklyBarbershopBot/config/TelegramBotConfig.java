@@ -3,6 +3,7 @@ package com.example.BooklyBarbershopBot.config;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
@@ -28,6 +29,14 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 @Configuration
 public class TelegramBotConfig {
+
+    @Bean
+    public DefaultBotOptions defaultBotOptions() {
+        DefaultBotOptions botOptions = new DefaultBotOptions();
+        botOptions.setMaxThreads(2); // Уменьшаем число потоков для минимизации конфликтов
+        botOptions.setGetUpdatesTimeout(20); // Таймаут поллинга 20 секунд
+        return botOptions;
+    }
 
     /**
      * Создаёт и регистрирует экземпляр {@link TelegramBotsApi} с переданным ботом {@link TelegramBot}.

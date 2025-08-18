@@ -36,4 +36,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Optional<Booking> findByRecordIdAndRecordHash(Long recordId, String recordHash);
 
+    List<Booking> findByStatus(String status);
+
 }

@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -31,10 +32,12 @@ public class MyBookingsHandler {
 
             // Фильтрация дубликатов по record_id и record_hash
             Set<String> seenRecords = new java.util.HashSet<>();
+            OffsetDateTime now = OffsetDateTime.now();
             List<Booking> bookings = allBookings.stream()
                     .filter(b -> {
-                        boolean isValid = "PENDING".equals(b.getStatus()) || "CONFIRMED".equals(b.getStatus());
-                        String recordKey = b.getRecordId() + "_" + b.getRecordHash();
+                        boolean isValid = "PENDING".equals(b.getStatus()) || "CONFIRMED".equals(b.getStatus()) || "COMPLETED".equals(b.getStatus());
+                        String recordKey = (b.getRecordId() != null ? b.getRecordId().toString() : "null") + "_" +
+                                (b.getRecordHash() != null ? b.getRecordHash() : "null");
                         boolean isUnique = seenRecords.add(recordKey);
                         log.info("Booking ID={} recordId={} recordHash={} status={} datetime={} isValid={} isUnique={}",
                                 b.getId(), b.getRecordId(), b.getRecordHash(), b.getStatus(), b.getDatetime(), isValid, isUnique);
@@ -66,44 +69,53 @@ public class MyBookingsHandler {
                     continue;
                 }
 
-                // Преобразование Timestamp в ZonedDateTime с нужным часовым поясом
                 String formattedDate = booking.getDatetime()
-                        .toInstant()
-                        .atZone(zoneId)
+                        .atZoneSameInstant(zoneId)
                         .format(outputFormatter);
+
+                String statusDisplay = switch (booking.getStatus()) {
+                    case "PENDING" -> "Ожидает подтверждения";
+                    case "CONFIRMED" -> "Подтверждено";
+                    case "COMPLETED" -> "Выполнено";
+                    default -> booking.getStatus();
+                };
 
                 StringBuilder text = new StringBuilder();
                 text.append("💈 *Мастер*: ").append(booking.getStaffName()).append("\n");
                 text.append("✂️ *Услуги*: ").append(booking.getServiceName()).append("\n");
                 text.append("⏰ *Дата и время*: ").append(formattedDate).append("\n");
-                text.append("Статус: ").append(booking.getStatus());
+                text.append("Статус: ").append(statusDisplay);
 
                 SendMessage msg;
-                if ("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) {
-                    if (booking.getRecordId() != null && booking.getRecordHash() != null && !booking.getRecordHash().isEmpty()) {
-                        InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
-                                .text("❌ Отменить")
-                                .callbackData("cancel_" + booking.getRecordId() + "_" + booking.getRecordHash())
-                                .build();
-                        InlineKeyboardMarkup markup = InlineKeyboardMarkup.builder()
-                                .keyboard(List.of(List.of(cancelButton)))
-                                .build();
+                // Показываем кнопку "Отменить" только для PENDING или CONFIRMED и если время не прошло
+                if (("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) &&
+                        booking.getDatetime().isAfter(now) &&
+                        booking.getRecordId() != null &&
+                        booking.getRecordHash() != null &&
+                        !booking.getRecordHash().isEmpty()) {
+                    InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
+                            .text("❌ Отменить эту запись")
+                            .callbackData("cancel_" + booking.getRecordId() + "_" + booking.getRecordHash())
+                            .build();
+                    InlineKeyboardMarkup markup = InlineKeyboardMarkup.builder()
+                            .keyboard(List.of(List.of(cancelButton)))
+                            .build();
 
-                        msg = SendMessage.builder()
-                                .chatId(chatId.toString())
-                                .text(text.toString())
-                                .replyMarkup(markup)
-                                .parseMode("Markdown")
-                                .build();
-                    } else {
-                        log.warn("Booking ID={} для chatId={} имеет null recordId или recordHash", booking.getId(), chatId);
-                        msg = SendMessage.builder()
-                                .chatId(chatId.toString())
-                                .text(text.toString() + "\n⚠️ Отмена недоступна: отсутствует идентификатор записи.")
-                                .parseMode("Markdown")
-                                .build();
-                    }
+                    msg = SendMessage.builder()
+                            .chatId(chatId.toString())
+                            .text(text.toString())
+                            .replyMarkup(markup)
+                            .parseMode("Markdown")
+                            .build();
                 } else {
+                    if ("COMPLETED".equals(booking.getStatus())) {
+                        text.append("\nℹ️ Эта запись уже выполнена.");
+                    } else if (booking.getDatetime().isBefore(now)) {
+                        text.append("\nℹ️ Эта запись просрочена и не может быть отменена.");
+                    } else {
+                        log.warn("Booking ID={} для chatId={} не имеет recordId или recordHash, отмена недоступна", booking.getId(), chatId);
+                        text.append("\n⚠️ Отмена недоступна: отсутствует идентификатор записи.");
+                    }
                     msg = SendMessage.builder()
                             .chatId(chatId.toString())
                             .text(text.toString())
