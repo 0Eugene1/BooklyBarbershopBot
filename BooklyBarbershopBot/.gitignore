@@ -1,45 +1,21 @@
-HELP.md
+# macOS
+.DS_Store
+
+# Maven
 target/
 .mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
+# IntelliJ IDEA
+.idea/
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
-
-# === Application Secrets ===
+# Application Secrets
 application.properties
 application.yml
 application-dev.properties
 application-prod.properties
-
-# === Build System ===
-/target/                 # Maven
-!.mvn/wrapper/maven-wrapper.jar
-
-.DS_Store
+.env
+barberdb_dump.sql
+*.log
