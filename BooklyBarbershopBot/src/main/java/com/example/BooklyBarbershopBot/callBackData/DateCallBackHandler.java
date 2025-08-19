@@ -100,7 +100,7 @@ public class DateCallBackHandler implements CallBackHandler {
                     List<List<InlineKeyboardButton>> rows = buildKeyboard(timeStrings, 3, (time, index) -> {
                         BookTimeDto slot = timeResponse.getData().get(index);
                         String safeDatetime = slot.getDatetime().substring(0, 16).replace("T", "_").replace(":", "-");
-                        String callbackData = String.format("slot_%s_%d_%d_%s", safeDatetime, staffId, serviceIds.get(0), slug);
+                        String callbackData = String.format("slot_%s_%d_%d_%s", safeDatetime, staffId, serviceIds.getFirst(), slug);
                         if (callbackData.length() > 64) {
                             callbackData = String.format("slot_%s_%d_%s", safeDatetime, staffId, serviceIds);
                         }

@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
+
 /**
  * Сущность {@code Barbershop}, представляющая барбершоп в системе.
  * <p>

@@ -135,69 +135,10 @@ public class MyBookingsHandler {
         });
     }
 
-//    public void handle(Long chatId, TelegramMessageSender sender) {
-//        clientService.findByTelegramId(chatId).ifPresentOrElse(client -> {
-//            List<Booking> bookings = bookingService.getAllBookings(client).stream()
-//                    .filter(b -> "PENDING".equals(b.getStatus()) || "CONFIRMED".equals(b.getStatus()))
-//                    .sorted((b1, b2) -> b2.getDatetime().compareTo(b1.getDatetime()))
-//                    .limit(5)
-//                    .toList();
-//
-//            if (bookings.isEmpty()) {
-//                sender.sendMessage(chatId, "У вас пока нет активных записей.");
-//                return;
-//            }
-//
-//            DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy | HH:mm");
-//            //TODO CHECK HOW IT WORKS 16 08
-//            for (Booking booking : bookings) {
-//                String formattedDate = booking.getDatetime()
-//                        .toLocalDateTime()
-//                        .format(outputFormatter);
-//                System.out.println(formattedDate);
-//
-//                StringBuilder text = new StringBuilder();
-//                text.append("💈 *Мастер*: ").append(booking.getStaffName()).append("\n");
-//                text.append("✂️ *Услуги*: ").append(booking.getServiceName()).append("\n");
-//                text.append("⏰ *Дата и время*: ").append(formattedDate).append("\n");
-//                text.append("Статус: ").append(booking.getStatus());
-//
-//                SendMessage msg;
-//                if ("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) {
-//                    InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
-//                            .text("❌ Отменить")
-//                            .callbackData("cancel_" + booking.getRecordId() + "_" + booking.getRecordHash())
-//                            .build();
-//                    InlineKeyboardMarkup markup = InlineKeyboardMarkup.builder()
-//                            .keyboard(List.of(List.of(cancelButton)))
-//                            .build();
-//
-//                    msg = SendMessage.builder()
-//                            .chatId(chatId.toString())
-//                            .text(text.toString())
-//                            .replyMarkup(markup)
-//                            .parseMode("Markdown")
-//                            .build();
-//                } else {
-//                    msg = SendMessage.builder()
-//                            .chatId(chatId.toString())
-//                            .text(text.toString())
-//                            .parseMode("Markdown")
-//                            .build();
-//                }
-//
-//                try {
-//                    sender.executeMessage(msg);
-//                } catch (TelegramApiException e) {
-//                    log.error("Ошибка при отправке записи", e);
-//                }
-//            }
-//        }, () -> sender.sendMessage(chatId, "⚠️ Клиент не найден."));
-//    }
-
     // Вспомогательный интерфейс, чтобы не тянуть в этот класс TelegramBot
     public interface TelegramMessageSender {
         void sendMessage(Long chatId, String text);
+
         void executeMessage(SendMessage message) throws TelegramApiException;
     }
 }

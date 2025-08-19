@@ -23,7 +23,7 @@ public interface CallBackHandler {
      * Обрабатывает входящий callbackQuery.
      *
      * @param callbackQuery объект callbackQuery от Telegram
-     * @param bot экземпляр TelegramBot для отправки сообщений и взаимодействия с Telegram API
+     * @param bot           экземпляр TelegramBot для отправки сообщений и взаимодействия с Telegram API
      */
     void handle(CallbackQuery callbackQuery, TelegramBot bot);
 }

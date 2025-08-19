@@ -23,14 +23,11 @@ public class TelegramSenderService implements MessageSender {
      * Отправляет текстовое сообщение в указанный чат Telegram.
      *
      * @param chatId идентификатор чата получателя
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
     @Override
     public void sendMessage(Long chatId, String text) {
-        SendMessage message = SendMessage.builder()
-                .chatId(chatId.toString())
-                .text(text)
-                .build();
+        SendMessage message = SendMessage.builder().chatId(chatId.toString()).text(text).build();
         try {
             telegramBot.execute(message);
         } catch (TelegramApiException e) {

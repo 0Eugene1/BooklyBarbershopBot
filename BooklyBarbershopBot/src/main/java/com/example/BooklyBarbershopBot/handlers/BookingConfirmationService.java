@@ -50,35 +50,4 @@ public class BookingConfirmationService {
             sender.sendMessage(chatId, "❌ Ошибка при создании или подтверждении записи.");
         }
     }
-
-//    public void confirmBooking(Long chatId, BookingData data, String smsCode, TelegramMessageSender sender) {
-//        try {
-//            // 1. Создаем или получаем клиента
-//            Client client = clientService.saveOrGetClient(data.getPhone(), chatId, data.getFullName(), "no-reply@example.com");
-//
-//            // 2. Получаем активную запись или создаем новую
-//            Booking booking = bookingService.getActiveBooking(client)
-//                    .orElseGet(() -> bookingService.createBookingFromData(client, data));
-//
-//            // 3. Создаем запись в Yclients
-//            boolean success = yclientsService.createBooking(data, client, smsCode);
-//
-//            if (success) {
-//                booking.setRecordId(data.getRecordId());
-//                booking.setRecordHash(data.getRecordHash());
-//                booking.setStatus("CONFIRMED");
-//                bookingService.saveBooking(booking);
-//
-//                sender.sendMessage(chatId, "✅ Запись подтверждена!");
-//            } else {
-//                sender.sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код или попробуйте позже.");
-//            }
-//        } catch (YclientsSmsConfirmationException e) {
-//            data.setAwaitingCode(true);
-//            sender.sendMessage(chatId, "🔐 Ваш номер требует подтверждения. Пожалуйста, введите код из SMS.");
-//        } catch (Exception e) {
-//            log.error("Ошибка при подтверждении записи", e);
-//            sender.sendMessage(chatId, "❌ Ошибка при создании или подтверждении записи.");
-//        }
-//    }
 }

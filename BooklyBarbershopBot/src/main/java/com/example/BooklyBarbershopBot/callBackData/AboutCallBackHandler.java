@@ -21,6 +21,7 @@ public class AboutCallBackHandler implements CallBackHandler {
 
     /**
      * Проверяет, поддерживает ли данный обработчик callback с указанными данными.
+     *
      * @param data данные callback-запроса
      * @return true, если данные начинаются с "about_"
      */
@@ -31,8 +32,9 @@ public class AboutCallBackHandler implements CallBackHandler {
 
     /**
      * Обрабатывает callback-запрос, отправляя информацию о барбершопе в чат.
+     *
      * @param callbackQuery объект callback-запроса от Telegram
-     * @param bot экземпляр Telegram-бота для отправки сообщений
+     * @param bot           экземпляр Telegram-бота для отправки сообщений
      */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {

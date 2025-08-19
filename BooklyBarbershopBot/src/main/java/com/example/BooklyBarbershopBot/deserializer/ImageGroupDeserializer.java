@@ -28,7 +28,7 @@ public class ImageGroupDeserializer extends JsonDeserializer<List<ImageGroupDto>
      * - Один JSON-объект (оборачивается в список из одного элемента)
      * - null (возвращает пустой список)
      *
-     * @param p JsonParser для чтения JSON
+     * @param p    JsonParser для чтения JSON
      * @param ctxt контекст десериализации
      * @return список ImageGroupDto
      * @throws IOException в случае ошибок чтения JSON

@@ -1,7 +1,6 @@
 package com.example.BooklyBarbershopBot.service;
 
 import com.example.BooklyBarbershopBot.entity.Client;
-import com.example.BooklyBarbershopBot.repository.BookingRepository;
 import com.example.BooklyBarbershopBot.repository.ClientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,16 +19,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ClientService {
     private final ClientRepository clientRepository;
-    private final BookingRepository bookingRepository;
 
     /**
      * Создает нового клиента или возвращает существующего по номеру телефона.
      * Если клиент уже есть, обновляет отсутствующие данные: полное имя, email, telegramId.
      *
-     * @param phone номер телефона клиента (используется как уникальный идентификатор)
+     * @param phone      номер телефона клиента (используется как уникальный идентификатор)
      * @param telegramId ID Telegram пользователя (может быть null)
-     * @param fullName полное имя клиента (может быть null)
-     * @param email email клиента (может быть null)
+     * @param fullName   полное имя клиента (может быть null)
+     * @param email      email клиента (может быть null)
      * @return сохраненный или найденный клиент
      */
     public Client saveOrGetClient(String phone, Long telegramId, String fullName, String email) {
@@ -99,7 +97,7 @@ public class ClientService {
         if (clients.size() > 1) {
             log.warn("Найдено {} клиентов для telegramId={}. Используется первый.", clients.size(), telegramId);
         }
-        return Optional.of(clients.get(0));
+        return Optional.of(clients.getFirst());
     }
 
     public void saveOrUpdateLastUsedSlug(Long telegramId, String slug) {

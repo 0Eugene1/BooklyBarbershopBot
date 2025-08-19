@@ -1,6 +1,7 @@
 package com.example.BooklyBarbershopBot.handlers;
 
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ClientService;
@@ -33,7 +34,7 @@ public class MenuCommandHandler {
         // 2️⃣ Из клиента
         if (slug == null) {
             slug = clientService.findByTelegramId(chatId)
-                    .map(client -> client.getLastUsedSlug())
+                    .map(Client::getLastUsedSlug)
                     .orElse(null);
         }
 

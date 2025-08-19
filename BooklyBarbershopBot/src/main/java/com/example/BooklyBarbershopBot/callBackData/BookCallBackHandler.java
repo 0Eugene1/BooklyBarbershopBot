@@ -32,6 +32,7 @@ public class BookCallBackHandler implements CallBackHandler {
 
     /**
      * Проверяет, поддерживает ли данный обработчик callback с указанными данными.
+     *
      * @param data данные callback-запроса
      * @return true, если данные начинаются с "book_"
      */
@@ -43,8 +44,9 @@ public class BookCallBackHandler implements CallBackHandler {
     /**
      * Обрабатывает callback-запрос, отправляя пользователю клавиатуру с мастерами,
      * доступными для записи в указанном барбершопе.
+     *
      * @param callbackQuery объект callback-запроса от Telegram
-     * @param bot экземпляр Telegram-бота для отправки сообщений
+     * @param bot           экземпляр Telegram-бота для отправки сообщений
      */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
@@ -87,9 +89,10 @@ public class BookCallBackHandler implements CallBackHandler {
 
     /**
      * Вспомогательный метод для отправки текстового сообщения пользователю.
-     * @param bot экземпляр Telegram-бота
+     *
+     * @param bot    экземпляр Telegram-бота
      * @param chatId идентификатор чата
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {

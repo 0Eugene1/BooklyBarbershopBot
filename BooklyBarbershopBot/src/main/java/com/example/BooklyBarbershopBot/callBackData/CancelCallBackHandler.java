@@ -65,7 +65,6 @@ public class CancelCallBackHandler implements CallBackHandler {
             return;
         }
 
-        Client client = optionalClient.get();
         String[] parts = data.split("_", 3);
         if (parts.length < 3) {
             sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.", null);
@@ -371,4 +370,4 @@ public class CancelCallBackHandler implements CallBackHandler {
 //        } catch (Exception e) {
 //            log.error("Ошибка при отправке сообщения для chatId={}", chatId, e);
 //        }
-    }
+}

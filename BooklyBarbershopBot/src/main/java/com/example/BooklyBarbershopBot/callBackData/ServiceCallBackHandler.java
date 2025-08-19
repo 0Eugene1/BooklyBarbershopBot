@@ -4,7 +4,6 @@ import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ParsingDtoService;
-import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,8 +13,6 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +29,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ServiceCallBackHandler implements CallBackHandler {
     private final BarbershopService barbershopService;
-    private final YclientsService yclientsService;
     private final ParsingDtoService parsingDtoService;
 
 
@@ -156,121 +152,6 @@ public class ServiceCallBackHandler implements CallBackHandler {
             log.error("Ошибка в callback service_", e);
             sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
-    }
-//    //FIXME TEST 16.08
-//    @Override
-//    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
-//        Long chatId = callbackQuery.getMessage().getChatId();
-//        String data = callbackQuery.getData();
-//
-//        try {
-//            String[] parts = data.split("_", 4);
-//            if (parts.length < 4) {
-//                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
-//                return;
-//            }
-//
-//            Long serviceId = Long.parseLong(parts[1]);
-//            Long staffId = Long.parseLong(parts[2]);
-//            String slug = parts[3];
-//
-//            BookingData bookingData = bot.getBookingCache().getOrDefault(chatId, new BookingData());
-//            bookingData.setSlug(slug);
-//            bookingData.setStaffId(staffId);
-//
-//
-//            barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
-//                String companyId = barbershop.getYclientsCompanyId();
-//
-//                try {
-//                    List<ServiceDto> services = parsingDtoService.getServicesParsed(companyId);
-//                    ServiceDto selectedService = services.stream()
-//                            .filter(s -> s.getId().equals(serviceId))
-//                            .findFirst()
-//                            .orElse(null);
-//
-//                    if (selectedService == null) {
-//                        sendMessage(bot, chatId, "⚠️ Услуга не найдена.");
-//                        return;
-//                    }
-//
-//
-//                    bookingData.setStaffId(staffId);
-//                    bookingData.setSlug(slug);
-//
-//                    if (!bookingData.getServiceIds().contains(serviceId)) {
-//                        bookingData.getServiceIds().add(serviceId);
-//                        log.info("Добавлен serviceId={}, текущий список serviceIds: {}", serviceId, bookingData.getServiceIds());
-//                    } else {
-//                        log.info("serviceId={} уже выбран, не добавляем повторно", serviceId);
-//                        sendMessage(bot, chatId, "⚠️ Эта услуга уже выбрана." +
-//                                " К сожалению на данный момент нет возможности добавлять одинаковые услуги." +
-//                                " Выберите другую или продолжите к выбору даты.");
-//                    }
-//
-//
-//                    // Сохраняем обратно в кэш
-//                    bot.getBookingCache().put(chatId, bookingData);
-//
-//                    // Формируем сообщение с выбранными услугами
-//                    StringBuilder sb = new StringBuilder("<b>Вы выбрали:</b>\n");
-//                    for (Long id : bookingData.getServiceIds()) {
-//                        services.stream()
-//                                .filter(s -> s.getId().equals(id))
-//                                .findFirst()
-//                                .ifPresent(s -> sb.append("• ").append(s.getTitle()).append("✅").append("\n"));
-//                    }
-//                    sb.append("\n<b>Выберите действие:</b>");
-//
-//                    // Формируем кнопки "Добавить ещё услугу" и "Продолжить к выбору даты"
-//                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-//                    rows.add(List.of(
-//                            InlineKeyboardButton.builder()
-//                                    .text("➕ Добавить ещё услугу")
-//                                    .callbackData("choose_service_" + staffId + "_" + slug)
-//                                    .build()
-//                    ));
-//                    rows.add(List.of(
-//                            InlineKeyboardButton.builder()
-//                                    .text("✅ Продолжить к выбору даты")
-//                                    .callbackData("continue_services_" + staffId + "_" + slug)
-//                                    .build()
-//                    ));
-//                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup(rows);
-//
-//                    SendMessage message = SendMessage.builder()
-//                            .chatId(chatId.toString())
-//                            .text(sb.toString())
-//                            .replyMarkup(keyboard)
-//                            .parseMode("HTML")
-//                            .build();
-//
-//                    bot.execute(message);
-//
-//                } catch (Exception e) {
-//                    log.error("Ошибка при обработке услуги", e);
-//                    sendMessage(bot, chatId, "❌ Не удалось обработать выбор услуги.");
-//                }
-//
-//            }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка в callback service_", e);
-//            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
-//        }
-//    }
-
-
-    /**
-     * Форматирует дату из ISO формата (yyyy-MM-dd) в dd.MM.yyyy.
-     *
-     * @param isoDate дата в формате ISO
-     * @return отформатированная дата
-     */
-    private String formatDate(String isoDate) {
-        LocalDate date = LocalDate.parse(isoDate); // "2025-07-29"
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-        return date.format(formatter);              // → "29.07.2025"
     }
 
     /**

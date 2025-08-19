@@ -1,7 +1,6 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
-import com.example.BooklyBarbershopBot.callBackData.CancelCallBackHandler;
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.handlers.BookingConfirmationService;
 import com.example.BooklyBarbershopBot.handlers.MenuCommandHandler;
@@ -63,7 +62,6 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
 
     //Сервисы для хранения данных клиентов и записей
     private final ClientService clientService;
-    private final CancelCallBackHandler cancelCallBackHandler;
     private final MyBookingsHandler myBookingsHandler;
     private final MenuCommandHandler menuCommandHandler;
     private final PhoneNumberRequestService phoneNumberRequestService;
@@ -126,54 +124,9 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
 
         BookingData data = bookingCache.get(chatId);
         if (data != null && handleBookingData(chatId, message, data, text)) {
-            return; // если обработка BookingData завершена, выходим
+            return;// если обработка BookingData завершена, выходим
         }
     }
-
-//    @EventListener
-//    public void handleContextRefreshed(ContextRefreshedEvent event) {
-//        if (isRegistered.compareAndSet(false, true)) {
-//            try {
-//                // Очистка предыдущих сессий
-//                clearPreviousSessions();
-//                // Регистрация бота
-//                TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-//                botsApi.registerBot(this);
-//                log.info("Бот успешно зарегистрирован");
-//            } catch (TelegramApiException e) {
-//                log.error("Ошибка при регистрации бота: {}", e.getMessage());
-//                isRegistered.set(false); // Сбрасываем флаг, чтобы попробовать снова
-//                // Повторная попытка через 10 секунд
-//                new java.util.Timer().schedule(new java.util.TimerTask() {
-//                    @Override
-//                    public void run() {
-//                        handleContextRefreshed(event);
-//                    }
-//                }, 10000);
-//            }
-//        } else {
-//            log.info("Бот уже зарегистрирован, пропускаем повторную регистрацию");
-//        }
-//    }
-//
-//    private void clearPreviousSessions() {
-//        try {
-//            // Очистка вебхуков и предыдущих сессий getUpdates
-//            DeleteWebhook deleteWebhook = new DeleteWebhook();
-//            deleteWebhook.setDropPendingUpdates(true); // Сбрасываем все ожидающие обновления
-//            execute(deleteWebhook);
-//            log.info("Предыдущие сессии getUpdates и webhook очищены");
-//
-//            // Дополнительно отправляем getUpdates с высоким offset, чтобы сбросить очередь
-//            GetUpdates getUpdates = new GetUpdates();
-//            getUpdates.setOffset(Integer.MAX_VALUE);
-//            getUpdates.setLimit(1);
-//            execute(getUpdates);
-//            log.info("Очередь обновлений getUpdates очищена");
-//        } catch (TelegramApiException e) {
-//            log.error("Ошибка при очистке предыдущих сессий: {}", e.getMessage());
-//        }
-//    }
 
     private boolean handleCommands(Long chatId, Message message, String text) {
         if (text.startsWith("/start")) {
@@ -302,10 +255,6 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
         });
         sendMessage(chatId, "Выберите запись для отмены из списка выше.");
     }
-//    private void handleCancelCommand(Long chatId) {
-//        cancelCallBackHandler.cancelBookingForChat(this, chatId);
-//    }
-
 
     /**
      * Обрабатывает текстовое сообщение пользователя.
@@ -352,7 +301,8 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                         execute(response);
                         log.info("Приветственное сообщение отправлено для slug={} и chatId={}", slug, chatId);
                     } catch (TelegramApiException e) {
-                        log.error("Ошибка при отправке приветствия для slug={} и chatId={}", slug, chatId, e);                    }
+                        log.error("Ошибка при отправке приветствия для slug={} и chatId={}", slug, chatId, e);
+                    }
                 }, () -> {
                     log.warn("Барбершоп с slug={} не найден для chatId={}", slug, chatId);
                     try {
@@ -361,7 +311,8 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                                 .text("❌ Барбершоп с slug '" + slug + "' не найден.")
                                 .build());
                     } catch (TelegramApiException e) {
-                        log.error("Ошибка при отправке сообщения о ненайденном барбершопе для chatId={}", chatId, e);                    }
+                        log.error("Ошибка при отправке сообщения о ненайденном барбершопе для chatId={}", chatId, e);
+                    }
                 });
 
 
@@ -371,15 +322,17 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                 try {
                     execute(SendMessage.builder()
                             .chatId(chatId.toString())
-                            .text("👋 Добро пожаловать! Чтобы начать, введите команду /start и добавьте через пробел уникальное название барбершопа. Например: /start <barbershop-...>\n\n" +
-                                    "Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.")
+                            .text("""
+                                    👋 Добро пожаловать! Чтобы начать, введите команду /start и добавьте через пробел уникальное название барбершопа. Например: /start <barbershop-...>
+                                    
+                                    Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.""")
                             .build());
                     log.info("Сообщение для /start без slug отправлено для chatId={}", chatId);
                 } catch (TelegramApiException e) {
                     log.error("Ошибка при отправке сообщения для /start без slug для chatId={}", chatId, e);
                 }
-        }
+            }
 
+        }
     }
-}
 }

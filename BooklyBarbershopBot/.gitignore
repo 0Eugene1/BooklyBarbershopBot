@@ -41,3 +41,5 @@ application-prod.properties
 # === Build System ===
 /target/                 # Maven
 !.mvn/wrapper/maven-wrapper.jar
+
+.DS_Store

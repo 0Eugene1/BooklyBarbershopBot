@@ -9,7 +9,7 @@ public interface MessageSender {
      * Отправить сообщение в чат с указанным chatId.
      *
      * @param chatId идентификатор чата пользователя
-     * @param text текст сообщения для отправки
+     * @param text   текст сообщения для отправки
      */
     void sendMessage(Long chatId, String text);
 }

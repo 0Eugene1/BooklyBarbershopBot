@@ -14,12 +14,6 @@ import java.util.Optional;
  */
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
-    /**
-     * Получить список всех записей (Booking) для данного клиента.
-     *
-     * @param client клиент, для которого ищем записи
-     * @return список записей клиента
-     */
 
     /**
      * Найти последнюю (по убыванию ID) активную запись (по статусу) для клиента.

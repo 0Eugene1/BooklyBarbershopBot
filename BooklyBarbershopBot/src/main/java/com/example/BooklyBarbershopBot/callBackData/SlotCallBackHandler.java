@@ -30,7 +30,6 @@ public class SlotCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     /**
      * Проверяет, начинается ли callbackData с "slot_".

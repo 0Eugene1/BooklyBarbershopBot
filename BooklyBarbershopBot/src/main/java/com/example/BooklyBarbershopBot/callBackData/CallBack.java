@@ -22,16 +22,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CallBack {
 
-    /** Список обработчиков callback-запросов */
+    /**
+     * Список обработчиков callback-запросов
+     */
     private final List<CallBackHandler> handlers;
 
-    /** Ссылка на основной Telegram-бот для отправки сообщений */
+    /**
+     * Ссылка на основной Telegram-бот для отправки сообщений
+     */
     @Setter
     private TelegramBot telegramBot;
 
     /**
      * Основной метод обработки callback-запроса.
      * Делегирует обработку первому обработчику, поддерживающему данные.
+     *
      * @param callbackQuery входящий callbackQuery от Telegram
      */
     public void handleCallback(CallbackQuery callbackQuery) {
@@ -68,16 +73,4 @@ public class CallBack {
         }
     }
 
-    /**
-     * Вспомогательный метод отправки сообщения пользователю.
-     * @param chatId идентификатор чата
-     * @param text текст сообщения
-     */
-    private void sendMessage(Long chatId, String text) {
-        try {
-            telegramBot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
-        }
-    }
 }

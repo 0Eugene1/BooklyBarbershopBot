@@ -49,7 +49,7 @@ public class StaffCallBackHandler implements CallBackHandler {
      * получает список услуг мастера и отправляет пользователю клавиатуру с услугами.
      *
      * @param callbackQuery объект callbackQuery
-     * @param bot экземпляр TelegramBot
+     * @param bot           экземпляр TelegramBot
      */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
@@ -123,9 +123,9 @@ public class StaffCallBackHandler implements CallBackHandler {
     /**
      * Вспомогательный метод для отправки сообщения пользователю.
      *
-     * @param bot экземпляр TelegramBot
+     * @param bot    экземпляр TelegramBot
      * @param chatId идентификатор чата
-     * @param text текст сообщения
+     * @param text   текст сообщения
      */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
