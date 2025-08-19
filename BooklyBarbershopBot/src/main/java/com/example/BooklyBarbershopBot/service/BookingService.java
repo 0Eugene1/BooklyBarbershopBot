@@ -5,11 +5,14 @@ import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class BookingService {
     private final BookingRepository bookingRepository;
@@ -18,25 +21,37 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    public Booking saveBooking(Client client, BookingData data) {
+    /**
+     * Создаёт Booking из BookingData и Client.
+     *
+     * @param client клиент, который делает запись
+     * @param data   данные записи из кеша
+     * @return созданная запись Booking
+     */
+    public Booking createBookingFromData(Client client, BookingData data) {
         Booking booking = Booking.builder()
                 .client(client)
                 .slug(data.getSlug())
-                .serviceId(data.getServiceId())
-                .staffId(data.getStaffId())
                 .datetime(data.getDatetime())
+                .staffId(data.getStaffId())
                 .staffName(data.getStaffName())
-                .serviceName(data.getServiceName())
+                .serviceId(data.getServiceIds().isEmpty() ? null : data.getServiceIds().getFirst()) // Сохраняем первый ID для обратной совместимости
+                .serviceName(String.join(", ", data.getServiceNames())) // Сохраняем все имена услуг
+                .status("PENDING")
                 .recordId(data.getRecordId())
                 .recordHash(data.getRecordHash())
-                .status("PENDING")
                 .build();
 
         return bookingRepository.save(booking);
     }
 
-    public Optional<Booking> getActiveBooking(Client client) {
-        return bookingRepository.findFirstByClientAndStatusOrderByIdDesc(client, "PENDING");
+    // В BookingService
+    public Optional<Booking> findByRecordIdAndRecordHash(Long recordId, String recordHash) {
+        return bookingRepository.findByRecordIdAndRecordHash(recordId, recordHash);
+    }
+
+    public List<Booking> findByStatus(String status) {
+        return bookingRepository.findByStatus(status);
     }
 
     public void updateBookingStatus(Booking booking, String status) {
@@ -44,9 +59,8 @@ public class BookingService {
         bookingRepository.save(booking);
     }
 
-    public void deleteBooking(Booking booking) {
-        bookingRepository.delete(booking);
+    public List<Booking> getAllBookings(Client client) {
+        return bookingRepository.findAllByClientOrderByIdDesc(client);
     }
+
 }
-
-

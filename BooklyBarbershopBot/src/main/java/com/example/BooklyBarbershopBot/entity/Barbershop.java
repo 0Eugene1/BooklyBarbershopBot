@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
+
 /**
  * Сущность {@code Barbershop}, представляющая барбершоп в системе.
  * <p>
@@ -66,5 +67,12 @@ public class Barbershop {
 
     @Column(name = "yclients_company_id", nullable = false)
     private String yclientsCompanyId;
+
+    @Column(columnDefinition = "TEXT")
+    private String aboutText;
+
+    @Column(length = 500)
+    private String reviewsUrl;
+
 
 }

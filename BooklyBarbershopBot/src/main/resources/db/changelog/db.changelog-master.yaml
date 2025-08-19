@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/initial-schema.yaml
+
+  - include:
+      file: db/changelog/changes/add-barbershop-about.yaml
+
+  - include:
+      file: db/changelog/changes/add-barbershop-reviews-url.yaml

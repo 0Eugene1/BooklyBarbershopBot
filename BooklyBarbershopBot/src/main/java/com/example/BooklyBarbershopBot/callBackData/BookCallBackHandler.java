@@ -16,19 +16,38 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Обработчик callback-запросов с префиксом "book_", отвечающий за показ списка мастеров
+ * для выбранного барбершопа и предоставляющий пользователю возможность выбрать мастера для записи.
+ * <p>
+ * Получает список доступных для записи мастеров из Yclients по компании и формирует клавиатуру с кнопками.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class BookCallbackHandler implements CallbackHandler {
+public class BookCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final ParsingDtoService parsingDtoService;
 
+    /**
+     * Проверяет, поддерживает ли данный обработчик callback с указанными данными.
+     *
+     * @param data данные callback-запроса
+     * @return true, если данные начинаются с "book_"
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("book_");
     }
 
+    /**
+     * Обрабатывает callback-запрос, отправляя пользователю клавиатуру с мастерами,
+     * доступными для записи в указанном барбершопе.
+     *
+     * @param callbackQuery объект callback-запроса от Telegram
+     * @param bot           экземпляр Telegram-бота для отправки сообщений
+     */
     @Override
     public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
         String data = callbackQuery.getData();
@@ -68,6 +87,13 @@ public class BookCallbackHandler implements CallbackHandler {
         }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
     }
 
+    /**
+     * Вспомогательный метод для отправки текстового сообщения пользователю.
+     *
+     * @param bot    экземпляр Telegram-бота
+     * @param chatId идентификатор чата
+     * @param text   текст сообщения
+     */
     private void sendMessage(TelegramBot bot, Long chatId, String text) {
         try {
             bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());

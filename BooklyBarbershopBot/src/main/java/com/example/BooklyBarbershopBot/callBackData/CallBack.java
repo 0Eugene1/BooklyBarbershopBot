@@ -10,63 +10,67 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 
 import java.util.List;
 
+/**
+ * Класс-распределитель callback-запросов от Telegram.
+ * <p>
+ * Получает входящие callbackQuery и делегирует их обработку первому подходящему обработчику
+ * из списка {@link CallBackHandler}. Если ни один обработчик не поддерживает данные callback,
+ * отправляет пользователю сообщение о неизвестной команде.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CallBack {
 
-    private final List<CallbackHandler> handlers;
+    /**
+     * Список обработчиков callback-запросов
+     */
+    private final List<CallBackHandler> handlers;
+
+    /**
+     * Ссылка на основной Telegram-бот для отправки сообщений
+     */
     @Setter
     private TelegramBot telegramBot;
 
-    public void handelCallback(CallbackQuery callbackQuery) {
+    /**
+     * Основной метод обработки callback-запроса.
+     * Делегирует обработку первому обработчику, поддерживающему данные.
+     *
+     * @param callbackQuery входящий callbackQuery от Telegram
+     */
+    public void handleCallback(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
-        for (CallbackHandler handler : handlers) {
+        Long chatId = callbackQuery.getMessage().getChatId();
+
+        for (CallBackHandler handler : handlers) {
             if (handler.supports(data)) {
-                handler.handle(callbackQuery, telegramBot);
+                try {
+                    handler.handle(callbackQuery, telegramBot);
+                } catch (Exception e) {
+                    log.error("Ошибка при обработке callbackData={} для chatId={}", data, chatId, e);
+                    try {
+                        telegramBot.execute(SendMessage.builder()
+                                .chatId(chatId.toString())
+                                .text("❌ Произошла ошибка. Попробуйте позже.")
+                                .build());
+                    } catch (Exception ex) {
+                        log.error("Ошибка при отправке сообщения об ошибке для chatId={}", chatId, ex);
+                    }
+                }
                 return;
             }
         }
-        sendMessage(callbackQuery.getMessage().getChatId(), "⚠️ Неизвестная команда.");
+
+        log.warn("Не найден обработчик для callbackData={} и chatId={}", data, chatId);
+        try {
+            telegramBot.execute(SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text("⚠️ Некорректный запрос.")
+                    .build());
+        } catch (Exception e) {
+            log.error("Ошибка при отправке сообщения о некорректном запросе для chatId={}", chatId, e);
+        }
     }
 
-    private void sendMessage(Long chatId, String text){
-            try {
-                telegramBot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-            } catch (Exception e) {
-                log.error("Ошибка при отправке сообщения", e);
-            }
-        }
 }
-
-
-//        } else if (data.startsWith("about_")) {
-//            responseText = "🛠 Раздел 'О нас' пока в разработке.";
-//        } else if (data.startsWith("feedback_")) {
-//            responseText = "🛠 Раздел отзывов пока в разработке.";
-
-
-//TODO БУДУЩИЙ МЕТОДО ДЛЯ ПОЛУЧЕНИЯ КАТЕГОРИЙ УСЛУГ ПО CATEGORY_ID
-//Map<Long, List<ServiceDto>> grouped = services.stream()
-//                        .filter(s -> s.getActive() != null && s.getActive() == 1)
-//                        .collect(Collectors.groupingBy(ServiceDto::getCategoryId));
-//
-//                StringBuilder sb = new StringBuilder("📋 Услуги по категориям:\n\n");
-//
-//                for (Map.Entry<Long, List<ServiceDto>> entry : grouped.entrySet()) {
-//                    Long categoryId = entry.getKey();
-//                    List<ServiceDto> serviceList = entry.getValue();
-//
-//                    String categoryName = yClientsService.getCategoryNameCached(companyId, categoryId.toString());
-//
-//                    sb.append("🗂 ").append(categoryName).append(":\n");
-//
-//                    for (ServiceDto s : serviceList) {
-//                        sb.append("- ").append(s.getTitle());
-//                        if (s.getPriceMin() != null) {
-//                            sb.append(" (от ").append(s.getPriceMin().intValue()).append(" ₽)");
-//                        }
-//                        sb.append("\n");
-//                    }
-//                    sb.append("\n");
-//                }
