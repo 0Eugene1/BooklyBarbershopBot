@@ -66,8 +66,10 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
     private final MenuCommandHandler menuCommandHandler;
     private final PhoneNumberRequestService phoneNumberRequestService;
     private final BookingConfirmationService bookingConfirmationService;
+
     @Value("${telegrambots.bots[0].username}")
     private String botUsername;
+
     @Value("${telegrambots.bots[0].token}")
     private String botToken;
 

@@ -31,6 +31,9 @@
         <telegram.bot.version>6.9.7.1</telegram.bot.version>
         <postgresql.version>42.7.3</postgresql.version>
         <liquibase.version>4.31.1</liquibase.version>
+        <db.url>jdbc:postgresql://localhost:5432/barberdb</db.url>
+        <db.user>postgres</db.user>
+        <db.pass>5117</db.pass>
     </properties>
     <dependencies>
         <dependency>
@@ -109,9 +112,9 @@
                 <version>4.31.1</version>
                 <configuration>
                     <changeLogFile>db/changelog/db.changelog-master.yaml</changeLogFile>
-                    <url>jdbc:postgresql://localhost:5432/barberdb</url>
-                    <username>postgres</username>
-                    <password>5117</password>
+                    <url>${db.url}</url>
+                    <username>${db.user}</username>
+                    <password>${db.pass}</password>
                     <driver>org.postgresql.Driver</driver>
                 </configuration>
             </plugin>

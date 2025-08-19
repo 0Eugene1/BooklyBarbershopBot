@@ -28,22 +28,23 @@ import java.util.Map;
 public class YclientsHttpClient {
 
     private WebClient webClient;
-
-    @Value("${yclients.partner-token}")
+    @Value("${YCLIENTS_PARTNER_TOKEN}")
     private String partnerToken;
 
-    @Value("${yclients.user-token}")
+    @Value("${YCLIENTS_USER_TOKEN}")
     private String userToken;
 
-    @Value("${yclients.base-url:https://api.yclients.com/api/v1}")
+    @Value("${YCLIENTS_BASE_URL:https://api.yclients.com/api/v1}")
     private String baseUrl;
-
     /**
      * Инициализация WebClient с базовым URL и заголовками авторизации.
      */
     @PostConstruct
     public void init() {
-        this.webClient = WebClient.builder().baseUrl(baseUrl).defaultHeader("Authorization", "Bearer " + partnerToken + ", User " + userToken).defaultHeader("Accept", "application/vnd.yclients.v2+json").build();
+        this.webClient = WebClient.builder().baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + partnerToken + ", User " + userToken)
+                .defaultHeader("Accept", "application/vnd.yclients.v2+json")
+                .build();
     }
 
     /**
