@@ -2,7 +2,7 @@ package com.example.BooklyBarbershopBot.service;
 
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.dto.StaffDto;
-import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
+import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

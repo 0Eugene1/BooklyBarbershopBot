@@ -2,6 +2,11 @@ databaseChangeLog:
   - changeSet:
       id: 1-create-barbershop
       author: Eugene
+      preConditions:
+        - onFail: CONTINUE
+        - not:
+            tableExists:
+              tableName: barbershop
       changes:
         - createTable:
             tableName: barbershop
@@ -36,6 +41,11 @@ databaseChangeLog:
   - changeSet:
       id: 2-create-client
       author: Eugene
+      preConditions:
+        - onFail: CONTINUE
+        - not:
+            tableExists:
+              tableName: client
       changes:
         - createTable:
             tableName: client
@@ -67,6 +77,11 @@ databaseChangeLog:
   - changeSet:
       id: 3-create-booking
       author: Eugene
+      preConditions:
+        - onFail: CONTINUE
+        - not:
+            tableExists:
+              tableName: booking
       changes:
         - createTable:
             tableName: booking
@@ -111,6 +126,10 @@ databaseChangeLog:
   - changeSet:
       id: 4-add-foreign-key-booking-client
       author: Eugene
+      preConditions:
+        - onFail: CONTINUE
+        - foreignKeyConstraintExists:
+            foreignKeyName: fk_booking_client
       changes:
         - addForeignKeyConstraint:
             baseTableName: booking

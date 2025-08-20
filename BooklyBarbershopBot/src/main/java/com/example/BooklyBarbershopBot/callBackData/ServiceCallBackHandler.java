@@ -164,7 +164,7 @@ public class ServiceCallBackHandler implements CallBackHandler {
     private void sendMessage(TelegramBot bot, Long chatId, String text, InlineKeyboardMarkup keyboard) {
         try {
             SendMessage.SendMessageBuilder builder = SendMessage.builder()
-                    .chatId(chatId.toString())
+                    .chatId(String.valueOf(chatId))
                     .text(text);
             if (keyboard != null) {
                 builder.replyMarkup(keyboard);

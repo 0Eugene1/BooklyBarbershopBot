@@ -31,6 +31,10 @@
         <telegram.bot.version>6.9.7.1</telegram.bot.version>
         <postgresql.version>42.7.3</postgresql.version>
         <liquibase.version>4.31.1</liquibase.version>
+        <jackson.databind.ver>2.19.0</jackson.databind.ver>
+<!--        <hibernate.52.version>2.21.1</hibernate.52.version>-->
+        <spring.retry.version>2.0.3</spring.retry.version>
+        <spring.aspects.version>7.0.0-M1</spring.aspects.version>
         <db.url>jdbc:postgresql://localhost:5432/barberdb</db.url>
         <db.user>postgres</db.user>
         <db.pass>5117</db.pass>
@@ -73,10 +77,36 @@
             <artifactId>liquibase-core</artifactId>
             <version>${liquibase.version}</version>
         </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.vladmihalcea</groupId>-->
+<!--            <artifactId>hibernate-types-52</artifactId>-->
+<!--            <version>${hibernate.52.version}</version>-->
+<!--        </dependency>-->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.databind.ver}</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/org.hibernate.validator/hibernate-validator -->
         <dependency>
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.springframework.retry/spring-retry -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+            <version>${spring.retry.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.springframework/spring-aspects -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aspects</artifactId>
+            <version>${spring.aspects.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
     </dependencies>
 
