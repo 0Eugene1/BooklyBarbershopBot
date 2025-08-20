@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250820-1
+      author: eugene
+      preConditions:
+        - onFail: CONTINUE
+        - not:
+            tableExists:
+              tableName: bot_events
+      changes:
+        - createTable:
+            tableName: bot_events
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: chat_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: barbershop_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_data
+                  type: JSONB
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+        - createIndex:
+            tableName: bot_events
+            indexName: idx_bot_events_shop_type
+            columns:
+              - column:
+                  name: barbershop_id
+              - column:
+                  name: event_type

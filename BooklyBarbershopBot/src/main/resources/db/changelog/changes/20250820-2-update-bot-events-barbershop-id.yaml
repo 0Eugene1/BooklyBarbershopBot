@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250820-2
+      author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: '0'
+            sql: SELECT COUNT(*) FROM bot_events
+      changes:
+        - dropColumn:
+            tableName: bot_events
+            columnName: barbershop_id
+        - addColumn:
+            tableName: bot_events
+            columns:
+              - column:
+                  name: barbershop_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_bot_events_shop_type
+            tableName: bot_events
+            columns:
+              - column:
+                  name: barbershop_id
+              - column:
+                  name: event_type

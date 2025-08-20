@@ -2,6 +2,7 @@ package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.handlers.BookingConfirmationService;
 import com.example.BooklyBarbershopBot.handlers.MenuCommandHandler;
 import com.example.BooklyBarbershopBot.handlers.MyBookingsHandler;
@@ -11,6 +12,7 @@ import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.sendMessage.TelegramMessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ClientService;
+import com.example.BooklyBarbershopBot.service.eventService.BotEventService;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +25,9 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -66,6 +70,7 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
     private final MenuCommandHandler menuCommandHandler;
     private final PhoneNumberRequestService phoneNumberRequestService;
     private final BookingConfirmationService bookingConfirmationService;
+    private final BotEventService botEventService;
 
     @Value("${telegrambots.bots[0].username}")
     private String botUsername;
@@ -201,18 +206,38 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
     }
 
     private void confirmBooking(Long chatId, BookingData data, String smsCode) {
-        bookingConfirmationService.confirmBooking(chatId, data, smsCode, new TelegramMessageSender() {
-            @Override
-            public void sendMessage(Long chatId, String text) {
-                TelegramBot.this.sendMessage(chatId, text);
-            }
+        try {
+            bookingConfirmationService.confirmBooking(chatId, data, smsCode, new TelegramMessageSender() {
+                @Override
+                public void sendMessage(Long chatId, String text) {
+                    TelegramBot.this.sendMessage(chatId, text);
+                }
 
-            @Override
-            public void executeMessage(SendMessage message) throws TelegramApiException {
-                execute(message);
-            }
-        });
+                @Override
+                public void executeMessage(SendMessage message) throws TelegramApiException {
+                    execute(message);
+                }
+            });
+            Map<String, Object> eventData = new HashMap<>();
+            eventData.put("fullName", data.getFullName());
+            eventData.put("phone", data.getPhone());
+            eventData.put("serviceNames", data.getServiceNames());
+            eventData.put("datetime", data.getDatetime() != null ? data.getDatetime().toString() : null);
+            eventData.put("staffId", data.getStaffId());
+            eventData.put("staffName", data.getStaffName());
+            eventData.put("slug", data.getSlug());
+            eventData.put("recordId", data.getRecordId());
+            eventData.put("recordHash", data.getRecordHash());
+            UUID barbershopId = barbershopService.getBySlug(data.getSlug())
+                    .map(Barbershop::getId)
+                    .orElse(null);
+            botEventService.saveEvent(chatId, barbershopId, "BOOKING_CREATED", eventData);
+        } catch (Exception e) {
+            log.error("Failed to confirm booking for chatId={}", chatId, e);
+            sendMessage(chatId, "Ошибка при подтверждении бронирования. Попробуйте снова.");
+        }
     }
+
 
 
     private void handleMyBookingsCommand(Long chatId) {
@@ -302,7 +327,10 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                     try {
                         execute(response);
                         log.info("Приветственное сообщение отправлено для slug={} и chatId={}", slug, chatId);
-                    } catch (TelegramApiException e) {
+                        Map<String, Object> eventData = new HashMap<>();
+                        eventData.put("slug", slug);
+                        eventData.put("barbershopName", barbershop.getName());
+                        botEventService.saveEvent(chatId, barbershop.getId(), "USER_STARTED", eventData);} catch (TelegramApiException e) {
                         log.error("Ошибка при отправке приветствия для slug={} и chatId={}", slug, chatId, e);
                     }
                 }, () -> {
@@ -330,7 +358,9 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                                     Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.""")
                             .build());
                     log.info("Сообщение для /start без slug отправлено для chatId={}", chatId);
-                } catch (TelegramApiException e) {
+                    Map<String, Object> eventData = new HashMap<>();
+                    eventData.put("action", "start_without_slug");
+                    botEventService.saveEvent(chatId, null, "USER_STARTED", eventData);} catch (TelegramApiException e) {
                     log.error("Ошибка при отправке сообщения для /start без slug для chatId={}", chatId, e);
                 }
             }

@@ -6,7 +6,7 @@ import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
 import com.example.BooklyBarbershopBot.service.ClientService;
-import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
+import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

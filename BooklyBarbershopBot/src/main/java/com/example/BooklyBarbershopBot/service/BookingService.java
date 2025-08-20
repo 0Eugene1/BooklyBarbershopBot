@@ -1,6 +1,7 @@
 package com.example.BooklyBarbershopBot.service;
 
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.repository.BookingRepository;
@@ -10,12 +11,14 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class BookingService {
     private final BookingRepository bookingRepository;
+    private final BarbershopService barbershopService; // Добавляем зависимость
 
     public Booking saveBooking(Booking booking) {
         return bookingRepository.save(booking);
@@ -63,4 +66,34 @@ public class BookingService {
         return bookingRepository.findAllByClientOrderByIdDesc(client);
     }
 
+    //cancelBooking для отмены записи с проверкой статуса.
+    public void cancelBooking(Long recordId, String recordHash) {
+        Optional<Booking> bookingOpt = findByRecordIdAndRecordHash(recordId, recordHash);
+        if (bookingOpt.isPresent()) {
+            Booking booking = bookingOpt.get();
+            if ("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) {
+                updateBookingStatus(booking, "CANCELLED");
+                log.info("Booking cancelled: recordId={}, recordHash={}", recordId, recordHash);
+            } else {
+                log.warn("Cannot cancel booking: recordId={}, recordHash={}, status={}", recordId, recordHash, booking.getStatus());
+                throw new IllegalStateException("Booking cannot be cancelled due to its status: " + booking.getStatus());
+            }
+        } else {
+            log.error("Booking not found: recordId={}, recordHash={}", recordId, recordHash);
+            throw new IllegalArgumentException("Booking not found for recordId=" + recordId + " and recordHash=" + recordHash);
+        }
+    }
+
+    //getBookingByRecordId для получения записи по recordId.
+    public Optional<Booking> getBookingByRecordId(Long recordId) {
+        return bookingRepository.findByRecordIdAndRecordHash(recordId, null)
+                .or(() -> bookingRepository.findByRecordIdAndRecordHash(recordId, ""));
+    }
+
+    //getBarbershopIdBySlug для получения UUID барбершопа по slug.
+    public UUID getBarbershopIdBySlug(String slug) {
+        return barbershopService.getBySlug(slug)
+                .map(Barbershop::getId)
+                .orElse(null);
+    }
 }

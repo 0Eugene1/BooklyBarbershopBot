@@ -2,7 +2,7 @@ package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
-import com.example.BooklyBarbershopBot.service.yclients.YclientsService;
+import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

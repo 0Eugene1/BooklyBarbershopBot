@@ -1,5 +1,7 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
+import com.example.BooklyBarbershopBot.service.BookingService;
+import com.example.BooklyBarbershopBot.service.eventService.BotEventService;
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -8,7 +10,10 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Класс-распределитель callback-запросов от Telegram.
@@ -27,6 +32,9 @@ public class CallBack {
      */
     private final List<CallBackHandler> handlers;
 
+    private final BotEventService botEventService;
+    private final BookingService bookingService;
+
     /**
      * Ссылка на основной Telegram-бот для отправки сообщений
      */
@@ -42,6 +50,41 @@ public class CallBack {
     public void handleCallback(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
+
+        // Обработка отмены записи
+        if (data.startsWith("cancel_")) {
+            String[] parts = data.split("_");
+            if (parts.length == 3) {
+                try {
+                    Long recordId = Long.parseLong(parts[1]);
+                    String recordHash = parts[2];
+
+                    // Отменяем запись
+                    bookingService.cancelBooking(recordId, recordHash);
+
+                    // Логируем событие BOOKING_CANCELLED
+                    Map<String, Object> eventData = new HashMap<>();
+                    eventData.put("recordId", recordId);
+                    eventData.put("recordHash", recordHash);
+                    UUID barbershopId = bookingService.getBookingByRecordId(recordId)
+                            .map(booking -> bookingService.getBarbershopIdBySlug(booking.getSlug()))
+                            .orElse(null);
+                    botEventService.saveEvent(chatId, barbershopId, "BOOKING_CANCELLED", eventData);
+
+                    telegramBot.sendMessage(chatId, "Запись успешно отменена.");
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                    log.error("Ошибка при отмене записи для chatId={}: {}", chatId, e.getMessage());
+                    telegramBot.sendMessage(chatId, "Ошибка: " + e.getMessage());
+                } catch (Exception e) {
+                    log.error("Неожиданная ошибка при отмене записи для chatId={}: {}", chatId, e.getMessage());
+                    telegramBot.sendMessage(chatId, "❌ Произошла ошибка при отмене записи. Попробуйте позже.");
+                }
+            } else {
+                log.warn("Неверный формат callbackData: {} для chatId={}", data, chatId);
+                telegramBot.sendMessage(chatId, "Ошибка: неверный формат данных.");
+            }
+            return;
+        }
 
         for (CallBackHandler handler : handlers) {
             if (handler.supports(data)) {

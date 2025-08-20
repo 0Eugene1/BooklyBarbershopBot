@@ -7,3 +7,9 @@ databaseChangeLog:
 
   - include:
       file: db/changelog/changes/add-barbershop-reviews-url.yaml
+
+  - include:
+      file: db/changelog/changes/20250820-1-create-bot-events.yaml
+
+  - include:
+      file: db/changelog/changes/20250820-2-update-bot-events-barbershop-id.yaml

@@ -1,4 +1,4 @@
-package com.example.BooklyBarbershopBot.service.yclients;
+package com.example.BooklyBarbershopBot.service.yclientsService;
 
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.dto.StaffDto;
