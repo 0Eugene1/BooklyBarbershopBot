@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250822-1
+      author: eugene
+      changes:
+        - addColumn:
+            tableName: booking
+            columns:
+              - column:
+                  name: barbershop_id
+                  type: UUID
+                  constraints:
+                    nullable: true

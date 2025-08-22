@@ -32,19 +32,22 @@ public class BookingService {
      * @return созданная запись Booking
      */
     public Booking createBookingFromData(Client client, BookingData data) {
+        UUID barbershopId = barbershopService.getBySlug(data.getSlug())
+                .map(Barbershop::getId)
+                .orElseThrow(() -> new IllegalStateException("Barbershop not found for slug: " + data.getSlug()));
         Booking booking = Booking.builder()
                 .client(client)
                 .slug(data.getSlug())
                 .datetime(data.getDatetime())
                 .staffId(data.getStaffId())
                 .staffName(data.getStaffName())
-                .serviceId(data.getServiceIds().isEmpty() ? null : data.getServiceIds().getFirst()) // Сохраняем первый ID для обратной совместимости
-                .serviceName(String.join(", ", data.getServiceNames())) // Сохраняем все имена услуг
+                .serviceId(data.getServiceIds().isEmpty() ? null : data.getServiceIds().getFirst())
+                .serviceName(String.join(", ", data.getServiceNames()))
                 .status("PENDING")
                 .recordId(data.getRecordId())
                 .recordHash(data.getRecordHash())
+                .barbershopId(barbershopId)
                 .build();
-
         return bookingRepository.save(booking);
     }
 
@@ -64,36 +67,5 @@ public class BookingService {
 
     public List<Booking> getAllBookings(Client client) {
         return bookingRepository.findAllByClientOrderByIdDesc(client);
-    }
-
-    //cancelBooking для отмены записи с проверкой статуса.
-    public void cancelBooking(Long recordId, String recordHash) {
-        Optional<Booking> bookingOpt = findByRecordIdAndRecordHash(recordId, recordHash);
-        if (bookingOpt.isPresent()) {
-            Booking booking = bookingOpt.get();
-            if ("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) {
-                updateBookingStatus(booking, "CANCELLED");
-                log.info("Booking cancelled: recordId={}, recordHash={}", recordId, recordHash);
-            } else {
-                log.warn("Cannot cancel booking: recordId={}, recordHash={}, status={}", recordId, recordHash, booking.getStatus());
-                throw new IllegalStateException("Booking cannot be cancelled due to its status: " + booking.getStatus());
-            }
-        } else {
-            log.error("Booking not found: recordId={}, recordHash={}", recordId, recordHash);
-            throw new IllegalArgumentException("Booking not found for recordId=" + recordId + " and recordHash=" + recordHash);
-        }
-    }
-
-    //getBookingByRecordId для получения записи по recordId.
-    public Optional<Booking> getBookingByRecordId(Long recordId) {
-        return bookingRepository.findByRecordIdAndRecordHash(recordId, null)
-                .or(() -> bookingRepository.findByRecordIdAndRecordHash(recordId, ""));
-    }
-
-    //getBarbershopIdBySlug для получения UUID барбершопа по slug.
-    public UUID getBarbershopIdBySlug(String slug) {
-        return barbershopService.getBySlug(slug)
-                .map(Barbershop::getId)
-                .orElse(null);
     }
 }

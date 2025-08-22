@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * Сущность Booking — представляет запись (бронь) на услугу в барбершопе.
@@ -69,4 +70,7 @@ public class Booking {
      * Идентификатор услуги в системе Yclients.
      */
     private Long serviceId;
+
+    @Column(name = "barbershop_id")
+    private UUID barbershopId;
 }

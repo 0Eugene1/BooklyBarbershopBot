@@ -3,6 +3,7 @@ package com.example.BooklyBarbershopBot.service;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.repository.BarbershopRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -17,11 +18,12 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BarbershopService {
     /**
      * Репозиторий для доступа к данным барбершопов.
      */
-    private final BarbershopRepository repository;
+    private final BarbershopRepository barbershopRepository;
 
     /**
      * Ищет барбершоп по уникальному Telegram slug.
@@ -30,6 +32,13 @@ public class BarbershopService {
      * @return {@link Optional} с найденным {@link Barbershop} или пустой, если барбершоп не найден
      */
     public Optional<Barbershop> getBySlug(String slug) {
-        return repository.findByTelegramSlug(slug);
+        log.info("Searching barbershop by slug: {}", slug);
+        Optional<Barbershop> barbershop = barbershopRepository.findByTelegramSlug(slug);
+        if (barbershop.isEmpty()) {
+            log.warn("Barbershop not found for slug: {}", slug);
+        } else {
+            log.info("Barbershop found: id={}, name={}", barbershop.get().getId(), barbershop.get().getName());
+        }
+        return barbershop;
     }
 }
