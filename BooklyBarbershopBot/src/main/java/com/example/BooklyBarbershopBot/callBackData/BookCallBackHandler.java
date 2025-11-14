@@ -64,11 +64,23 @@ public class BookCallBackHandler implements CallBackHandler {
 
                 for (StaffDto staff : staffList) {
                     if (Boolean.TRUE.equals(staff.getBookable())) {
-                        InlineKeyboardButton button = new InlineKeyboardButton();
-                        button.setText(staff.getName());
-                        button.setCallbackData("staff_" + staff.getId() + "_" + slug);
+                        String buttonText = staff.getName();
+                        String specialization = staff.getSpecialization();
+                        if (specialization != null && !specialization.isEmpty()) {
+                            buttonText += " (" + specialization + ")";
+                        }
+
+                        InlineKeyboardButton button = InlineKeyboardButton.builder()
+                                .text(buttonText)
+                                .callbackData("staff_" + staff.getId() + "_" + slug)
+                                .build();
                         rows.add(Collections.singletonList(button));
                     }
+                }
+
+                if (rows.isEmpty()) {
+                    sendMessage(bot, chatId, "⚠️ Нет доступных мастеров.");
+                    return;
                 }
 
                 keyboard.setKeyboard(rows);
