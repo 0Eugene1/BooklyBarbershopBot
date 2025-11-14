@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250827-barbershop-users
+      author: Eugene
+      changes:
+        - createTable:
+            tableName: barbershop_users
+            columns:
+              - column:
+                  name: barbershop_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+            primaryKey:
+              columnNames: barbershop_id, user_id
+              constraintName: pk_barbershop_users

@@ -204,9 +204,15 @@ public class CancelCallBackHandler implements CallBackHandler {
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             for (StaffDto staff : staffList) {
+                String buttonText = staff.getName();
+                String specialization = staff.getSpecialization();
+                if (specialization != null && !specialization.isEmpty()) {
+                    buttonText += " (" + specialization + ")";
+                }
+
                 rows.add(List.of(
                         InlineKeyboardButton.builder()
-                                .text(staff.getName())
+                                .text(buttonText)
                                 .callbackData("staff_" + staff.getId() + "_" + slug)
                                 .build()
                 ));

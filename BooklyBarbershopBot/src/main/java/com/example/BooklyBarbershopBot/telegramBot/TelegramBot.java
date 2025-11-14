@@ -330,7 +330,8 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                         Map<String, Object> eventData = new HashMap<>();
                         eventData.put("slug", slug);
                         eventData.put("barbershopName", barbershop.getName());
-                        botEventService.saveEvent(chatId, barbershop.getId(), "USER_STARTED", eventData);} catch (TelegramApiException e) {
+                        botEventService.saveEvent(chatId, barbershop.getId(), "USER_STARTED", eventData);
+                    } catch (TelegramApiException e) {
                         log.error("Ошибка при отправке приветствия для slug={} и chatId={}", slug, chatId, e);
                     }
                 }, () -> {
@@ -340,12 +341,15 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                                 .chatId(chatId.toString())
                                 .text("❌ Барбершоп с slug '" + slug + "' не найден.")
                                 .build());
+                        Map<String, Object> eventData = new HashMap<>();
+                        eventData.put("slug", slug);
+                        eventData.put("action", "invalid_slug");
+                        // Сохраняем событие без barbershopId, если это допустимо, или пропускаем
+                        botEventService.saveEvent(chatId, null, "USER_STARTED_INVALID_SLUG", eventData);
                     } catch (TelegramApiException e) {
                         log.error("Ошибка при отправке сообщения о ненайденном барбершопе для chatId={}", chatId, e);
                     }
                 });
-
-
             } else {
                 // Обработка /start без slug
                 log.info("Обработка /start без slug для chatId={}", chatId);
@@ -353,18 +357,16 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
                     execute(SendMessage.builder()
                             .chatId(chatId.toString())
                             .text("""
-                                    👋 Добро пожаловать! Чтобы начать, введите команду /start и добавьте через пробел уникальное название барбершопа. Например: /start <barbershop-...>
-                                    
-                                    Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.""")
+                              👋 Добро пожаловать! Чтобы начать, введите команду /start и добавьте через пробел уникальное название барбершопа. Например: /start <barbershop-...>
+                              
+                              Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.""")
                             .build());
                     log.info("Сообщение для /start без slug отправлено для chatId={}", chatId);
-                    Map<String, Object> eventData = new HashMap<>();
-                    eventData.put("action", "start_without_slug");
-                    botEventService.saveEvent(chatId, null, "USER_STARTED", eventData);} catch (TelegramApiException e) {
+                    // Не сохраняем событие USER_STARTED, так как barbershopId неизвестен
+                } catch (TelegramApiException e) {
                     log.error("Ошибка при отправке сообщения для /start без slug для chatId={}", chatId, e);
                 }
             }
-
         }
     }
 }
