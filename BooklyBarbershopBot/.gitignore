@@ -20,4 +20,5 @@ application-prod.properties
 .env
 barberdb_dump.sql
 *.log
+liquibase.properties.DS_Store
 liquibase.properties

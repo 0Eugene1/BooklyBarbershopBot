@@ -2,6 +2,13 @@ databaseChangeLog:
   - changeSet:
       id: 2
       author: Eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: barbershop
+                columnName: about_text
       changes:
         - addColumn:
             tableName: barbershop

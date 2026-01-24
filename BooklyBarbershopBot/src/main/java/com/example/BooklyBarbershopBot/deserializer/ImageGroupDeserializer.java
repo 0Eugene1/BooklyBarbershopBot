@@ -13,25 +13,34 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Кастомный десериализатор для JSON-данных, представляющих список объектов ImageGroupDto.
+ * Кастомный десериализатор для обработки поля изображений в формате JSON.
  * <p>
- * Позволяет десериализовать как массив JSON-объектов, так и одиночный JSON-объект,
- * преобразуя его в список из одного элемента.
- * Если значение null, возвращает пустой список.
+ * Необходим из-за особенностей внешних API, которые могут возвращать изображения
+ * в разных форматах: массив объектов {@code [...]}, одиночный объект {@code {...}}
+ * или значение {@code null}.
+ * <p>
+ * Пример использования в DTO:
+ * <pre>
+ * {@code @JsonDeserialize(using = ImageGroupDeserializer.class)}
+ * private List<ImageGroupDto> images;
+ * </pre>
  */
 public class ImageGroupDeserializer extends JsonDeserializer<List<ImageGroupDto>> {
 
     /**
-     * Десериализует JSON в список ImageGroupDto.
-     * Поддерживает варианты:
-     * - JSON-массив объектов
-     * - Один JSON-объект (оборачивается в список из одного элемента)
-     * - null (возвращает пустой список)
+     * Преобразует входящий JSON-узел в типизированный список.
+     * <p>
+     * Логика обработки токенов:
+     * <ul>
+     * <li>{@link JsonToken#START_ARRAY}: стандартная десериализация коллекции.</li>
+     * <li>{@link JsonToken#START_OBJECT}: чтение одного объекта и упаковка в {@link ArrayList}.</li>
+     * <li>{@link JsonToken#VALUE_NULL}: возврат неизменяемого пустого списка.</li>
+     * </ul>
      *
-     * @param p    JsonParser для чтения JSON
-     * @param ctxt контекст десериализации
-     * @return список ImageGroupDto
-     * @throws IOException в случае ошибок чтения JSON
+     * @param p    JsonParser для потокового чтения данных.
+     * @param ctxt Контекст десериализации (используется для доступа к конфигурации маппера).
+     * @return Гарантированный ненулевой список объектов {@link ImageGroupDto}.
+     * @throws IOException при нарушении структуры JSON или проблемах ввода-вывода.
      */
     @Override
     public List<ImageGroupDto> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {

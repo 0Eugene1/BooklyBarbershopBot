@@ -14,8 +14,10 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Сервис для парсинга DTO объектов (ServiceDto и StaffDto) из сырых JSON-ответов Yclients API.
- * Позволяет преобразовывать JSON-строки в список DTO с учетом разных форматов данных.
+ * Сервис-десериализатор для преобразования сырых JSON-ответов Yclients в типизированные DTO.
+ * <p>
+ * Основная задача — извлечение полезной нагрузки из узла "data" и её маппинг
+ * в списки объектов {@link ServiceDto} и {@link StaffDto}.
  */
 @Service
 @Slf4j
@@ -23,44 +25,51 @@ import java.util.List;
 public class ParsingDtoService {
 
     private final YclientsService yclientsService;
+    private final ObjectMapper mapper = new ObjectMapper(); // Инжектируйте или создайте один экземпляр
 
     /**
-     * Получить список услуг (ServiceDto) из JSON, возвращаемого Yclients API для указанной компании.
-     * Учитывает случаи, когда "data" может быть массивом или одним объектом.
+     * Парсит список услуг для конкретного филиала.
+     * <p>
+     * Логика поддерживает как массовый возврат услуг (массив), так и
+     * единичную услугу (объект), оборачивая её в список для консистентности.
      *
-     * @param companyId ID компании в системе Yclients
-     * @return список услуг ServiceDto
-     * @throws Exception при ошибках парсинга JSON
+     * @param companyId идентификатор филиала Yclients.
+     * @return список услуг.
+     * @throws Exception при ошибках структуры JSON или несовпадении полей DTO.
      */
     public List<ServiceDto> getServicesParsed(String companyId) throws Exception {
         String json = yclientsService.getServicesRawJson(companyId);
-        ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(json);
         JsonNode dataNode = root.path("data");
 
         if (dataNode.isArray()) {
-            return mapper.readValue(dataNode.toString(), new TypeReference<>() {
-            });
+            return mapper.readValue(dataNode.toString(), new TypeReference<List<ServiceDto>>() {});
         } else if (dataNode.isObject()) {
             ServiceDto single = mapper.readValue(dataNode.toString(), ServiceDto.class);
             return List.of(single);
         }
+
+        log.warn("Узел 'data' в ответе услуг для компании {} пуст или некорректен", companyId);
         return Collections.emptyList();
     }
 
     /**
-     * Получить список мастеров (StaffDto) из JSON, возвращаемого Yclients API для указанной компании.
+     * Парсит список сотрудников (мастеров) для филиала.
      *
-     * @param companyId ID компании в системе Yclients
-     * @return список мастеров StaffDto
-     * @throws Exception при ошибках парсинга JSON
+     * @param companyId идентификатор филиала Yclients.
+     * @return список мастеров.
+     * @throws Exception при ошибках десериализации.
      */
     public List<StaffDto> getStaffParsed(String companyId) throws Exception {
         String json = yclientsService.getStaffRawJson(companyId);
-        ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(json);
         JsonNode dataNode = root.path("data");
-        return mapper.readValue(dataNode.toString(), new TypeReference<>() {
-        });
+
+        if (!dataNode.isArray()) {
+            log.warn("Ожидался массив мастеров для компании {}, но получено: {}", companyId, dataNode.getNodeType());
+            return Collections.emptyList();
+        }
+
+        return mapper.readValue(dataNode.toString(), new TypeReference<List<StaffDto>>() {});
     }
 }

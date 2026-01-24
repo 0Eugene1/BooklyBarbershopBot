@@ -2,13 +2,12 @@ package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.dto.StaffDto;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ParsingDtoService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -17,6 +16,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Обработчик callback-запросов для выбора услуги конкретного мастера.
+ * <p>
+ * Реагирует на префикс {@code choose_service_}. Класс отвечает за сопоставление
+ * выбранного мастера с доступными ему услугами в системе Yclients.
+ * Формирует список кнопок с названиями услуг и их минимальной стоимостью.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -25,13 +31,33 @@ public class ChooseServiceCallBackHandler implements CallBackHandler {
     private final BarbershopService barbershopService;
     private final ParsingDtoService parsingDtoService;
 
+    /**
+     * Проверяет, предназначен ли данный callback для отображения услуг.
+     *
+     * @param data строка данных callback.
+     * @return {@code true}, если данные начинаются с "choose_service_".
+     */
     @Override
     public boolean supports(String data) {
         return data.startsWith("choose_service_");
     }
 
+    /**
+     * Обрабатывает выбор мастера пользователем и подгружает список его услуг.
+     * <p>
+     * Алгоритм:
+     * <ol>
+     * <li>Парсит {@code staffId} и {@code slug} барбершопа из callback-строки.</li>
+     * <li>Запрашивает полный список услуг филиала через {@link ParsingDtoService}.</li>
+     * <li>Фильтрует услуги, оставляя только те, к которым привязан выбранный мастер.</li>
+     * <li>Генерирует инлайн-клавиатуру, где каждая кнопка ведет к следующему шагу: {@code service_{id}_{staffId}_{slug}}.</li>
+     * </ol>
+     *
+     * @param callbackQuery объект запроса от Telegram.
+     * @param messageSender сервис для отправки ответов пользователю.
+     */
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
 
@@ -41,7 +67,7 @@ public class ChooseServiceCallBackHandler implements CallBackHandler {
             String[] parts = data.split("_", 4);
             if (parts.length < 4) {
                 log.warn("[ChooseService] Некорректный формат callback data, parts.length={}", parts.length);
-                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
+                messageSender.sendMessage(chatId, "⚠️ Ошибка в данных callback.");
                 return;
             }
 
@@ -50,7 +76,7 @@ public class ChooseServiceCallBackHandler implements CallBackHandler {
                 staffId = Long.parseLong(parts[2]);
             } catch (NumberFormatException e) {
                 log.error("[ChooseService] Ошибка парсинга staffId из '{}'", parts[2], e);
-                sendMessage(bot, chatId, "⚠️ Некорректный ID мастера.");
+                messageSender.sendMessage(chatId, "⚠️ Некорректный ID мастера.");
                 return;
             }
 
@@ -81,7 +107,7 @@ public class ChooseServiceCallBackHandler implements CallBackHandler {
                     log.info("[ChooseService] Услуг после фильтрации по мастеру: {}", staffServices.size());
 
                     if (staffServices.isEmpty()) {
-                        sendMessage(bot, chatId, "🔍 У этого мастера пока нет доступных услуг.");
+                        messageSender.sendMessage(chatId, "🔍 У этого мастера пока нет доступных услуг.");
                         return;
                     }
                     List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -100,38 +126,25 @@ public class ChooseServiceCallBackHandler implements CallBackHandler {
                         rows.add(Collections.singletonList(button));
                     }
 
-                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-                    keyboard.setKeyboard(rows);
-
-                    SendMessage message = SendMessage.builder()
-                            .chatId(chatId.toString())
-                            .text("\uD83D\uDC87 Выберите услугу:") // короткий заголовок
-                            .replyMarkup(keyboard)
-                            .build();
-
-                    bot.execute(message);
+                    messageSender.sendMessage(
+                            chatId,"\uD83D\uDC87 Выберите услугу:",
+                            InlineKeyboardMarkup.builder()
+                                    .keyboard(rows)
+                                    .build());
 
                 } catch (Exception e) {
                     log.error("[ChooseService] Ошибка при получении услуг мастера", e);
-                    sendMessage(bot, chatId, "❌ Не удалось получить услуги мастера. Попробуйте позже.");
+                    messageSender.sendMessage(chatId, "❌ Не удалось получить услуги мастера. Попробуйте позже.");
                 }
 
             }, () -> {
                 log.warn("[ChooseService] Барбершоп с слагом '{}' не найден", slug);
-                sendMessage(bot, chatId, "❌ Барбершоп не найден.");
+                messageSender.sendMessage(chatId, "❌ Барбершоп не найден.");
             });
 
         } catch (Exception e) {
             log.error("[ChooseService] Ошибка при обработке callback choose_service_", e);
-            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
-        }
-    }
-
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
-        try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("[ChooseService] Ошибка при отправке сообщения", e);
+            messageSender.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
     }
 }

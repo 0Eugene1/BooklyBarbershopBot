@@ -1,13 +1,12 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.StaffDto;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.ParsingDtoService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -17,10 +16,11 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Обработчик callback-запросов с префиксом "book_", отвечающий за показ списка мастеров
- * для выбранного барбершопа и предоставляющий пользователю возможность выбрать мастера для записи.
+ * Обработчик callback-запросов для инициации процесса записи на стрижку.
  * <p>
- * Получает список доступных для записи мастеров из Yclients по компании и формирует клавиатуру с кнопками.
+ * При получении префикса {@code book_}, класс запрашивает через {@link ParsingDtoService}
+ * список сотрудников из внешней системы (Yclients), фильтрует их по доступности
+ * и формирует интерактивное меню выбора мастера.
  */
 @Slf4j
 @Component
@@ -31,10 +31,10 @@ public class BookCallBackHandler implements CallBackHandler {
     private final ParsingDtoService parsingDtoService;
 
     /**
-     * Проверяет, поддерживает ли данный обработчик callback с указанными данными.
+     * Проверяет, предназначен ли данный callback для отображения списка мастеров.
      *
-     * @param data данные callback-запроса
-     * @return true, если данные начинаются с "book_"
+     * @param data строка данных callback.
+     * @return {@code true}, если данные начинаются с "book_".
      */
     @Override
     public boolean supports(String data) {
@@ -42,31 +42,42 @@ public class BookCallBackHandler implements CallBackHandler {
     }
 
     /**
-     * Обрабатывает callback-запрос, отправляя пользователю клавиатуру с мастерами,
-     * доступными для записи в указанном барбершопе.
+     * Обрабатывает выбор конкретного заведения для записи.
+     * <p>
+     * Алгоритм работы:
+     * <ol>
+     * <li>Извлекает идентификатор (slug) заведения.</li>
+     * <li>Получает {@code companyId} для интеграции с Yclients.</li>
+     * <li>Запрашивает список персонала и фильтрует мастеров с флагом {@code bookable}.</li>
+     * <li>Формирует вертикальный список кнопок, отображая имя и специализацию мастера.</li>
+     * <li>Передает управление следующему этапу через callback {@code staff_{id}_{slug}}.</li>
+     * </ol>
      *
-     * @param callbackQuery объект callback-запроса от Telegram
-     * @param bot           экземпляр Telegram-бота для отправки сообщений
+     * @param callbackQuery запрос от Telegram.
+     * @param messageSender компонент отправки уведомлений.
      */
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
         String slug = data.replace("book_", "");
 
+        log.debug("Запрос списка мастеров для барбершопа: {}", slug);
+
         barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
             String companyId = barbershop.getYclientsCompanyId();
             try {
+                // Получение данных о сотрудниках из внешней системы
                 List<StaffDto> staffList = parsingDtoService.getStaffParsed(companyId);
-
-                InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
                 for (StaffDto staff : staffList) {
+                    // Отображаем только тех мастеров, к которым открыта запись
                     if (Boolean.TRUE.equals(staff.getBookable())) {
                         String buttonText = staff.getName();
+
                         String specialization = staff.getSpecialization();
-                        if (specialization != null && !specialization.isEmpty()) {
+                        if (specialization != null && !specialization.isBlank()) {
                             buttonText += " (" + specialization + ")";
                         }
 
@@ -79,38 +90,21 @@ public class BookCallBackHandler implements CallBackHandler {
                 }
 
                 if (rows.isEmpty()) {
-                    sendMessage(bot, chatId, "⚠️ Нет доступных мастеров.");
+                    log.warn("У компании {} (ID: {}) нет доступных для записи мастеров", slug, companyId);
+                    messageSender.sendMessage(chatId, "⚠️ К сожалению, сейчас нет свободных мастеров для записи в этом филиале.");
                     return;
                 }
 
-                keyboard.setKeyboard(rows);
-
-                SendMessage message = SendMessage.builder()
-                        .chatId(chatId.toString())
-                        .text("💈 Выберите мастера:")
-                        .replyMarkup(keyboard)
+                InlineKeyboardMarkup keyboard = InlineKeyboardMarkup.builder()
+                        .keyboard(rows)
                         .build();
 
-                bot.execute(message);
-            } catch (Exception e) {
-                log.error("Ошибка при получении мастеров для slug: {}", slug, e);
-                sendMessage(bot, chatId, "❌ Не удалось получить список мастеров. Попробуйте позже.");
-            }
-        }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
-    }
+                messageSender.sendMessage(chatId, "💈 Выберите мастера:", keyboard);
 
-    /**
-     * Вспомогательный метод для отправки текстового сообщения пользователю.
-     *
-     * @param bot    экземпляр Telegram-бота
-     * @param chatId идентификатор чата
-     * @param text   текст сообщения
-     */
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
-        try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
-        }
+            } catch (Exception e) {
+                log.error("Сбой интеграции с Yclients для компании {}: {}", slug, e.getMessage());
+                messageSender.sendMessage(chatId, "❌ Не удалось получить список мастеров. Пожалуйста, попробуйте позже или позвоните нам.");
+            }
+        }, () -> messageSender.sendMessage(chatId, "❌ Барбершоп не найден."));
     }
 }

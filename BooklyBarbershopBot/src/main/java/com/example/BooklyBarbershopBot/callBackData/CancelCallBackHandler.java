@@ -4,16 +4,18 @@ import com.example.BooklyBarbershopBot.dto.StaffDto;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
+import com.example.BooklyBarbershopBot.enums.BookingStatus;
+import com.example.BooklyBarbershopBot.repository.BookingRepository;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import com.example.BooklyBarbershopBot.service.eventService.BotEventService;
 import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -23,6 +25,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+/**
+ * Обработчик callback-запросов для отмены существующей записи.
+ * <p>
+ * Класс реализует комплексную логику отмены: проверяет права владения записью,
+ * актуальность времени, статус записи в локальной БД и инициирует удаление через API Yclients.
+ * После успешной отмены предлагает пользователю записаться заново.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -33,7 +42,16 @@ public class CancelCallBackHandler implements CallBackHandler {
     private final YclientsService yclientsService;
     private final BarbershopService barbershopService;
     private final BotEventService boteventService;
+    private final BookingStateService bookingStateService;
+    private final BookingRepository bookingRepository;
 
+    /**
+     * Проверяет, является ли запрос командой на отмену.
+     * Формат данных: {@code cancel_{recordId}_{recordHash}}
+     *
+     * @param data данные callback.
+     * @return {@code true}, если формат соответствует ожидаемому.
+     */
     @Override
     public boolean supports(String data) {
         if (data == null || !data.startsWith("cancel_")) {
@@ -55,20 +73,32 @@ public class CancelCallBackHandler implements CallBackHandler {
         }
     }
 
+    /**
+     * Основной метод обработки отмены записи.
+     * <p>
+     * Шаги обработки:
+     * <ol>
+     * <li>Валидация клиента и параметров записи (recordId, hash).</li>
+     * <li>Проверка "мягких" ограничений: не является ли запись уже завершенной или прошедшей по времени.</li>
+     * <li>Вызов внешнего API Yclients для физической отмены.</li>
+     * <li>В случае успеха: смена статуса в БД на {@link BookingStatus#CANCELED} и логирование события.</li>
+     * <li>В случае ошибки API (например, запись уже подтверждена на месте): перевод в {@link BookingStatus#COMPLETED}.</li>
+     * </ol>
+     */
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         Long chatId = callbackQuery.getMessage().getChatId();
         String data = callbackQuery.getData();
 
         Optional<Client> optionalClient = clientService.findByTelegramId(chatId);
         if (optionalClient.isEmpty()) {
-            sendMessage(bot, chatId, "⚠️ Клиент не найден.", null);
+            messageSender.sendMessage(chatId, "⚠️ Клиент не найден.", null);
             return;
         }
 
         String[] parts = data.split("_", 3);
         if (parts.length < 3) {
-            sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.", null);
+            messageSender.sendMessage(chatId, "⚠️ Ошибка в данных callback.", null);
             log.warn("Некорректный callbackData: {} для chatId={}", data, chatId);
             return;
         }
@@ -77,7 +107,7 @@ public class CancelCallBackHandler implements CallBackHandler {
         String recordHash = parts[2];
 
         if (recordIdStr == null || recordIdStr.equals("null") || recordHash == null || recordHash.isEmpty()) {
-            sendMessage(bot, chatId, "⚠️ Ошибка: отсутствует идентификатор записи или хэш.", null);
+            messageSender.sendMessage(chatId, "⚠️ Ошибка: отсутствует идентификатор записи или хэш.", null);
             log.warn("Недопустимые recordId={} или recordHash={} для chatId={}", recordIdStr, recordHash, chatId);
             return;
         }
@@ -86,20 +116,20 @@ public class CancelCallBackHandler implements CallBackHandler {
         try {
             recordId = Long.parseLong(recordIdStr);
         } catch (NumberFormatException e) {
-            sendMessage(bot, chatId, "⚠️ Ошибка: некорректный идентификатор записи.", null);
+            messageSender.sendMessage(chatId, "⚠️ Ошибка: некорректный идентификатор записи.", null);
             log.warn("Некорректный recordId={} для chatId={}", recordIdStr, chatId);
             return;
         }
 
         Optional<Booking> optionalBooking = bookingService.findByRecordIdAndRecordHash(recordId, recordHash);
         if (optionalBooking.isEmpty()) {
-            sendMessage(bot, chatId, "⚠️ Запись не найдена.", null);
+            messageSender.sendMessage(chatId,"⚠️ Запись не найдена.", null);
             return;
         }
 
         Booking booking = optionalBooking.get();
         if (!booking.getClient().getTelegramId().equals(chatId)) {
-            sendMessage(bot, chatId, "⚠️ Эта запись не принадлежит вам.", null);
+            messageSender.sendMessage(chatId,"⚠️ Эта запись не принадлежит вам.", null);
             return;
         }
 
@@ -110,12 +140,13 @@ public class CancelCallBackHandler implements CallBackHandler {
                 .atZoneSameInstant(zoneId)
                 .format(outputFormatter);
 
-        // Отображаем статус в стиле MyBookingsHandler
+        // Статус в человекочитаемом виде
         String statusDisplay = switch (booking.getStatus()) {
-            case "PENDING" -> "Ожидает подтверждения";
-            case "CONFIRMED" -> "Подтверждено";
-            case "COMPLETED" -> "Выполнено";
-            default -> booking.getStatus();
+            case PENDING -> "Ожидает подтверждения";
+            case CONFIRMED -> "Подтверждено";
+            case IN_PROGRESS -> "В процессе";
+            case COMPLETED -> "Выполнено";
+            case CANCELED -> "Отменено";
         };
 
         StringBuilder text = new StringBuilder();
@@ -126,18 +157,24 @@ public class CancelCallBackHandler implements CallBackHandler {
 
         // Проверяем статус и дату
         OffsetDateTime now = OffsetDateTime.now();
-        if ("COMPLETED".equals(booking.getStatus())) {
-            text.append("\nℹ️ Эта запись уже выполнена.");
-            sendMessage(bot, chatId, text.toString(), "Markdown");
+
+        // Проверка на завершенные записи
+        if (booking.getStatus() == BookingStatus.COMPLETED) {
+            text.append("\nℹ️ <b>Эта запись уже выполнена.</b>");
+            messageSender.sendMarkdown(chatId, text.toString());
             return;
-        } else if (booking.getDatetime().isBefore(now)) {
-            text.append("\nℹ️ Эта запись просрочена и не может быть отменена.");
-            bookingService.updateBookingStatus(booking, "COMPLETED");
-            sendMessage(bot, chatId, text.toString(), "Markdown");
+        }
+        // Если запись уже прошла
+        if (booking.getEndTime().isBefore(now)) {
+            text.append("\nℹ️ <b>Эта запись уже завершена и не может быть отменена.</b>");
+            booking.setStatus(BookingStatus.COMPLETED);  // ставим статус через enum
+            bookingRepository.save(booking);                // сохраняем изменения
+            messageSender.sendMarkdown(chatId, text.toString());
             return;
-        } else if (!"PENDING".equals(booking.getStatus()) && !"CONFIRMED".equals(booking.getStatus())) {
-            text.append("\nℹ️ Эта запись уже отменена или не подлежит отмене.");
-            sendMessage(bot, chatId, text.toString(), "Markdown");
+        }
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.CONFIRMED) {
+            text.append("\nℹ️ <b>Эта запись уже отменена или не подлежит отмене.</b>");
+            messageSender.sendMarkdown(chatId, text.toString());
             return;
         }
 
@@ -149,56 +186,69 @@ public class CancelCallBackHandler implements CallBackHandler {
                 .orElse(null);
         if (barbershopId == null) {
             log.error("Barbershop not found for slug: {}, recordId: {}, chatId: {}", booking.getSlug(), recordId, chatId);
-            sendMessage(bot, chatId, "❌ Ошибка: барбершоп не найден.", null);
+            messageSender.sendMessage(chatId,"❌ Ошибка: барбершоп не найден.", null);
             return;
         }
         // Пытаемся отменить запись
+        // Пытаемся отменить запись через Yclients
         try {
             boolean success = yclientsService.cancelBooking(recordId, recordHash);
             if (success) {
-                bookingService.updateBookingStatus(booking, "CANCELLED");
-                bot.getBookingCache().remove(chatId);
+                booking.setStatus(BookingStatus.CANCELED);
+                bookingRepository.save(booking);
+                bookingStateService.remove(chatId);
 
                 //Сохранение события
                 Map<String, Object> eventData = new HashMap<>();
                 eventData.put("recordId", recordId);
                 eventData.put("recordHash", recordHash);
+
                 boteventService.saveEvent(chatId, barbershopId, "BOOKING_CANCELLED", eventData);
-                sendMessage(bot, chatId, "✅ Запись отменена.", null);
+
+                messageSender.sendMessage(chatId, "✅Запись отменена.", null);
                 // Предлагаем выбрать новую услугу
-                sendStaffSelectionMenu(bot, chatId, booking.getSlug());
+                sendStaffSelectionMenu(messageSender, chatId, booking.getSlug());
             } else {
-                bookingService.updateBookingStatus(booking, "COMPLETED");
-                text.append("\nℹ️ Эта запись уже выполнена и не может быть отменена.");
-                sendMessage(bot, chatId, text.toString(), "Markdown");
+                // запись не удалась, ставим COMPLETED
+                booking.setStatus(BookingStatus.COMPLETED);
+                bookingRepository.save(booking);
+
+                text.append("\nℹ️ <b>Эта запись уже выполнена и не может быть отменена.</b>");
+                messageSender.sendMessage(chatId, text.toString(), null);
                 log.error("Не удалось отменить запись recordId={} для chatId={}", recordId, chatId);
             }
         } catch (Exception e) {
             log.error("Ошибка при вызове Yclients API для отмены записи recordId={} для chatId={}: {}", recordId, chatId, e.getMessage());
             if (e.getMessage().contains("403") || e.getMessage().contains("Запись подтверждена в филиале")) {
-                bookingService.updateBookingStatus(booking, "COMPLETED");
-                text.append("\nℹ️ Эта запись уже выполнена и не может быть отменена.");
-                sendMessage(bot, chatId, text.toString(), "Markdown");
+                booking.setStatus(BookingStatus.COMPLETED);
+                bookingRepository.save(booking);
+
+                text.append("\nℹ️ <b>Эта запись уже выполнена и не может быть отменена.</b>");
+                messageSender.sendMessage(chatId, text.toString(), null);
             } else {
-                sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.", null);
+                messageSender.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.", null);
             }
         }
     }
 
-    private void sendStaffSelectionMenu(TelegramBot bot, Long chatId, String slug) {
+    /**
+     * Формирует и отправляет меню выбора мастеров после успешной отмены.
+     * Позволяет пользователю мгновенно перейти к созданию новой записи.
+     */
+    private void sendStaffSelectionMenu(MessageSender messageSender, Long chatId, String slug) {
         barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
             String companyId = barbershop.getYclientsCompanyId();
             List<StaffDto> staffList = yclientsService.getFreshStaff(companyId);
 
             if (staffList == null || staffList.isEmpty()) {
-                sendMessage(bot, chatId, "⚠️ Нет доступных мастеров.", null);
+                messageSender.sendMessage(chatId, "⚠️ Нет доступных мастеров.", null);
                 return;
             }
 
             staffList.removeIf(staff -> !Boolean.TRUE.equals(staff.getBookable()));
 
             if (staffList.isEmpty()) {
-                sendMessage(bot, chatId, "⚠️ Нет доступных мастеров.", null);
+                messageSender.sendMessage(chatId, "⚠️ Нет доступных мастеров.", null);
                 return;
             }
 
@@ -218,32 +268,17 @@ public class CancelCallBackHandler implements CallBackHandler {
                 ));
             }
 
-            SendMessage msg = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("👨‍🔧 Выберите мастера:")
-                    .replyMarkup(InlineKeyboardMarkup.builder().keyboard(rows).build())
-                    .build();
-
             try {
-                bot.execute(msg);
+                messageSender.sendMessage(
+                        chatId,"👨‍🔧 Выберите мастера:",
+                        InlineKeyboardMarkup.builder()
+                                .keyboard(rows)
+                                .build()
+                );
             } catch (Exception e) {
                 log.error("Ошибка при отправке меню мастеров для chatId={}", chatId, e);
             }
-        }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден.", null));
+        }, () -> messageSender.sendMessage(chatId, "❌ Барбершоп не найден.", null));
     }
 
-    private void sendMessage(TelegramBot bot, Long chatId, String text, String parseMode) {
-        try {
-            SendMessage msg = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text(text)
-                    .build();
-            if (parseMode != null) {
-                msg.setParseMode(parseMode);
-            }
-            bot.execute(msg);
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения для chatId={}", chatId, e);
-        }
-    }
 }

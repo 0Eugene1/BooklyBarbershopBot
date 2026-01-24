@@ -3,10 +3,11 @@ databaseChangeLog:
       id: 20250820-1
       author: eugene
       preConditions:
-        - onFail: CONTINUE
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
         - not:
-            tableExists:
-              tableName: bot_events
+            - tableExists:
+                tableName: bot_events
       changes:
         - createTable:
             tableName: bot_events

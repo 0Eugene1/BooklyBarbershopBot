@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260121-3-add-fields-booking
+      author: eugene
+      comment: Добавление end_time, total_duration_minutes и временное изменение типа status
+      changes:
+        # 1. Добавляем end_time
+        - addColumn:
+            tableName: booking
+            columns:
+              - column:
+                  name: end_time
+                  type: timestamptz
+                  constraints:
+                    nullable: true   # потом можно сделать not null отдельным changeset-ом
+
+        # 2. Добавляем total_duration_minutes
+        - addColumn:
+            tableName: booking
+            columns:
+              - column:
+                  name: total_duration_minutes
+                  type: integer
+                  constraints:
+                    nullable: true
+
+        # 3. Меняем тип status (временно на VARCHAR, если был другой тип)
+        - modifyDataType:
+            tableName: booking
+            columnName: status
+            newDataType: VARCHAR(50)
+
+      # Опционально: rollback на случай отката
+      rollback:
+        - dropColumn:
+            tableName: booking
+            columnName: end_time
+        - dropColumn:
+            tableName: booking
+            columnName: total_duration_minutes
+        - modifyDataType:
+            tableName: booking
+            columnName: status
+            newDataType: VARCHAR(20)   # верни предыдущий тип, если знаешь

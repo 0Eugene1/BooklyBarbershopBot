@@ -9,6 +9,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Сервис для агрегации и анализа статистических данных бота.
+ * <p>
+ * Обрабатывает сырые данные о событиях, предоставляя количественные показатели
+ * активности пользователей и эффективности процесса бронирования для каждого филиала.
+ */
 @Service
 @RequiredArgsConstructor
 public class BotEventStatsService {
@@ -16,15 +22,14 @@ public class BotEventStatsService {
     private final BotEventRepository repository;
 
     /**
-     * Возвращает статистику событий для конкретного барбершопа.
+     * Формирует карту распределения событий по типам.
+     * <p>
+     * Позволяет понять, какие функции бота наиболее востребованы (например, просмотр цен,
+     * выбор мастера или отмена записи).
      *
-     * @param barbershopId ID барбершопа
-     * @return Map<EventType, Count>
+     * @param barbershopId уникальный идентификатор филиала.
+     * @return Map, где ключ — строковый идентификатор типа события, а значение — общее количество срабатываний.
      */
-
-    //Метод getEventCountsByType возвращает Map<String, Long>,
-    // где ключ — тип события (USER_STARTED, BOOKING_CREATED и т.д.),
-    // а значение — количество таких событий для конкретного барбершопа.
     public Map<String, Long> getEventCountsByType(UUID barbershopId) {
         List<Object[]> results = repository.getEventCounts(barbershopId);
 
@@ -36,15 +41,25 @@ public class BotEventStatsService {
         }
         return stats;
     }
+
     /**
-     * Количество уникальных пользователей (chat_id) для конкретного барбершопа.
+     * Вычисляет охват аудитории бота для конкретного филиала.
+     *
+     * @param barbershopId идентификатор заведения.
+     * @return общее количество уникальных пользователей (по их Telegram chatId).
      */
     public Long getUniqueUsersCount(UUID barbershopId) {
         return repository.countDistinctChatIdByBarbershopId(barbershopId);
     }
 
     /**
-     * Количество успешных бронирований (например, событие BOOKING_CREATED).
+     * Подсчитывает количество успешно созданных записей.
+     * <p>
+     * Метрика базируется на событии "BOOKING_CREATED", которое генерируется
+     * в момент успешного подтверждения записи.
+     *
+     * @param barbershopId идентификатор заведения.
+     * @return количество успешных бронирований за всё время.
      */
     public Long getBookingsCount(UUID barbershopId) {
         return repository.countByBarbershopIdAndEventType(barbershopId, "BOOKING_CREATED");

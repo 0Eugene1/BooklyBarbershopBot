@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260121-1-idx-booking
+      author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - and:
+            - columnExists:
+                tableName: booking
+                columnName: status
+            - columnExists:
+                tableName: booking
+                columnName: end_time
+      changes:
+        - createIndex:
+            tableName: booking
+            indexName: idx_booking_status_endtime
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: end_time

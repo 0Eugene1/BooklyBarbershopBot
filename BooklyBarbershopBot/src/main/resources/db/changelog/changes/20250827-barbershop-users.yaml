@@ -2,6 +2,12 @@ databaseChangeLog:
   - changeSet:
       id: 20250827-barbershop-users
       author: Eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: barbershop_users
       changes:
         - createTable:
             tableName: barbershop_users
@@ -16,6 +22,5 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: false
-            primaryKey:
-              columnNames: barbershop_id, user_id
-              constraintName: pk_barbershop_users
+      # primary key лучше вынести отдельным change (см. ниже), но если хочешь оставить здесь — можно
+      # но в твоём варианте primaryKey стоит внутри createTable — это тоже работает

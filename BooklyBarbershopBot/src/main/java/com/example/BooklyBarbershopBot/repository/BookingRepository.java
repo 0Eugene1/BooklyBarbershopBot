@@ -2,34 +2,76 @@ package com.example.BooklyBarbershopBot.repository;
 
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
+import com.example.BooklyBarbershopBot.enums.BookingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Репозиторий для работы с сущностью Booking.
- * Предоставляет стандартные CRUD-операции и дополнительные методы для поиска записей по клиенту и статусу.
+ * Репозиторий для управления бронированиями.
+ * <p>
+ * Сочетает в себе функционал для обслуживания клиентских запросов (история записей)
+ * и административных задач (автоматическая смена статусов по времени).
  */
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     /**
-     * Найти последнюю (по убыванию ID) активную запись (по статусу) для клиента.
-     * Используется, например, для отмены текущей записи.
-     *
-     * @param client клиент, для которого ищем запись
-     * @param statuses статус записи (например, "PENDING", "CONFIRMED")
-     * @return опциональный объект Booking, если найден
+     * Автоматически завершает записи, время которых истекло.
+     * Используется планировщиком задач для поддержания актуальности данных.
      */
-    //Для отмены записи по chatId нужно найти последнюю или активную запись в БД.
-    Optional<Booking> findFirstByClientAndStatusInOrderByIdDesc(Client client, List<String> statuses);
+    @Modifying
+    @Query("""
+        UPDATE Booking b
+        SET b.status = :completed
+        WHERE b.status IN :statuses
+          AND b.endTime < :now
+    """)
+    int completeFinishedBookings(
+            @Param("statuses") List<BookingStatus> statuses,
+            @Param("completed") BookingStatus completed,
+            @Param("now") OffsetDateTime now
+    );
 
+    /**
+     * Переводит записи в состояние "Выполняется", когда наступает время визита.
+     */
+    @Modifying
+    @Query("""
+        UPDATE Booking b
+        SET b.status = :inProgress
+        WHERE b.status = :confirmed
+          AND b.datetime < :now
+    """)
+    int markInProgress(
+            @Param("confirmed") BookingStatus confirmed,
+            @Param("inProgress") BookingStatus inProgress,
+            @Param("now") OffsetDateTime now
+    );
+
+    /**
+     * Возвращает полную историю записей клиента, отсортированную от новых к старым.
+     */
     List<Booking> findAllByClientOrderByIdDesc(Client client);
 
+    /**
+     * Находит конкретную запись по уникальной связке идентификаторов Yclients.
+     * Используется для обработки отмен и синхронизации с CRM.
+     */
     Optional<Booking> findByRecordIdAndRecordHash(Long recordId, String recordHash);
 
-    List<Booking> findByStatus(String status);
-
+    /**
+     * Находит самую свежую запись клиента в конкретном барбершопе.
+     * Полезно для автоматического предложения оставить отзыв после стрижки.
+     */
+    Optional<Booking> findTopByClientTelegramIdAndSlugOrderByDatetimeDesc(
+            Long telegramId,
+            String slug
+    );
 }

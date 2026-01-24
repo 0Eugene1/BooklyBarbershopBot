@@ -1,6 +1,7 @@
 package com.example.BooklyBarbershopBot.handlers;
 
 import com.example.BooklyBarbershopBot.entity.Booking;
+import com.example.BooklyBarbershopBot.enums.BookingStatus;
 import com.example.BooklyBarbershopBot.service.BookingService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Обработчик раздела "Мои записи".
+ * <p>
+ * Класс агрегирует историю клиента, выполняет сортировку по времени (descending)
+ * и ограничивает выборку последними 5 событиями для предотвращения спама в чате.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -25,6 +32,12 @@ public class MyBookingsHandler {
     private final ClientService clientService;
     private final BookingService bookingService;
 
+    /**
+     * Формирует список карточек бронирования.
+     * <p>
+     * Для каждой записи создается отдельное сообщение. Это позволяет прикреплять
+     * инлайн-кнопку "Отменить" индивидуально к каждой активной брони.
+     */
     public void handle(Long chatId, TelegramMessageSender sender) {
         clientService.findByTelegramId(chatId).ifPresentOrElse(client -> {
             List<Booking> allBookings = bookingService.getAllBookings(client);
@@ -35,7 +48,10 @@ public class MyBookingsHandler {
             OffsetDateTime now = OffsetDateTime.now();
             List<Booking> bookings = allBookings.stream()
                     .filter(b -> {
-                        boolean isValid = "PENDING".equals(b.getStatus()) || "CONFIRMED".equals(b.getStatus()) || "COMPLETED".equals(b.getStatus());
+                        boolean isValid =
+                                b.getStatus() == BookingStatus.PENDING ||
+                                        b.getStatus() == BookingStatus.CONFIRMED ||
+                                        b.getStatus() == BookingStatus.COMPLETED;
                         String recordKey = (b.getRecordId() != null ? b.getRecordId().toString() : "null") + "_" +
                                 (b.getRecordHash() != null ? b.getRecordHash() : "null");
                         boolean isUnique = seenRecords.add(recordKey);
@@ -74,11 +90,13 @@ public class MyBookingsHandler {
                         .format(outputFormatter);
 
                 String statusDisplay = switch (booking.getStatus()) {
-                    case "PENDING" -> "Ожидает подтверждения";
-                    case "CONFIRMED" -> "Подтверждено";
-                    case "COMPLETED" -> "Выполнено";
-                    default -> booking.getStatus();
+                    case PENDING -> "Ожидает подтверждения";
+                    case CONFIRMED -> "Подтверждено";
+                    case IN_PROGRESS -> "В процессе";
+                    case COMPLETED -> "Выполнено";
+                    case CANCELED -> "Отменено";
                 };
+
 
                 StringBuilder text = new StringBuilder();
                 text.append("💈 *Мастер*: ").append(booking.getStaffName()).append("\n");
@@ -87,12 +105,16 @@ public class MyBookingsHandler {
                 text.append("Статус: ").append(statusDisplay);
 
                 SendMessage msg;
-                // Показываем кнопку "Отменить" только для PENDING или CONFIRMED и если время не прошло
-                if (("PENDING".equals(booking.getStatus()) || "CONFIRMED".equals(booking.getStatus())) &&
-                        booking.getDatetime().isAfter(now) &&
+                // Показываем кнопку "Отменить" только для PENDING или CONFIRMED
+                // и если время не прошло (с защитой от null)
+                boolean canCancel = (booking.getStatus() == BookingStatus.PENDING ||
+                        booking.getStatus() == BookingStatus.CONFIRMED) &&
                         booking.getRecordId() != null &&
                         booking.getRecordHash() != null &&
-                        !booking.getRecordHash().isEmpty()) {
+                        !booking.getRecordHash().isEmpty() &&
+                        (booking.getEndTime() != null) && booking.getEndTime().isAfter(now);
+
+                if (canCancel) {
                     InlineKeyboardButton cancelButton = InlineKeyboardButton.builder()
                             .text("❌ Отменить эту запись")
                             .callbackData("cancel_" + booking.getRecordId() + "_" + booking.getRecordHash())
@@ -108,13 +130,19 @@ public class MyBookingsHandler {
                             .parseMode("Markdown")
                             .build();
                 } else {
-                    if ("COMPLETED".equals(booking.getStatus())) {
+                    if (booking.getStatus() == BookingStatus.COMPLETED) {
                         text.append("\nℹ️ Эта запись уже выполнена.");
-                    } else if (booking.getDatetime().isBefore(now)) {
-                        text.append("\nℹ️ Эта запись просрочена и не может быть отменена.");
+                    } else if (booking.getEndTime() != null && booking.getEndTime().isBefore(now)) {
+                        text.append("\nℹ️ Эта запись уже завершена и не может быть отменена.");
                     } else {
-                        log.warn("Booking ID={} для chatId={} не имеет recordId или recordHash, отмена недоступна", booking.getId(), chatId);
-                        text.append("\n⚠️ Отмена недоступна: отсутствует идентификатор записи.");
+                        log.warn("Booking ID={} для chatId={} не имеет recordId/recordHash/endTime, отмена недоступна",
+                                booking.getId(), chatId);
+                        text.append("\n⚠️ Отмена недоступна: ");
+                        if (booking.getEndTime() == null) {
+                            text.append("время окончания не указано.");
+                        } else {
+                            text.append("отсутствует идентификатор записи.");
+                        }
                     }
                     msg = SendMessage.builder()
                             .chatId(chatId.toString())
@@ -135,10 +163,20 @@ public class MyBookingsHandler {
         });
     }
 
+    /**
+     * Абстракция над механизмом отправки сообщений.
+     * Позволяет тестировать логику отображения без прямой зависимости от Telegram API.
+     */
     // Вспомогательный интерфейс, чтобы не тянуть в этот класс TelegramBot
     public interface TelegramMessageSender {
+        /**
+         * Отправка простого текстового сообщения.
+         */
         void sendMessage(Long chatId, String text);
 
+        /**
+         * Выполнение сложного метода отправки (с клавиатурой, разметкой и т.д.).
+         */
         void executeMessage(SendMessage message) throws TelegramApiException;
     }
 }

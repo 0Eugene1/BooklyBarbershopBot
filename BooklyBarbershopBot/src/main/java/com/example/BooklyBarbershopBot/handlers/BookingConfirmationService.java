@@ -3,6 +3,7 @@ package com.example.BooklyBarbershopBot.handlers;
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
+import com.example.BooklyBarbershopBot.enums.BookingStatus;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.sendMessage.TelegramMessageSender;
 import com.example.BooklyBarbershopBot.service.BookingService;
@@ -12,6 +13,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * Сервис финализации бронирования.
+ * <p>
+ * Координирует взаимодействие между локальной базой данных и внешним API Yclients.
+ * Отвечает за:
+ * 1. Регистрацию/обновление данных клиента.
+ * 2. Создание локальной записи о визите.
+ * 3. Подтверждение записи во внешней системе (включая обработку SMS-кодов).
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,33 +31,57 @@ public class BookingConfirmationService {
     private final BookingService bookingService;
     private final YclientsService yclientsService;
 
+    /**
+     * Выполняет финальное подтверждение записи.
+     * <p>
+     * Если метод вызывается первый раз, Yclients может выбросить исключение требования SMS.
+     * При повторном вызове с переданным {@code smsCode} запись подтверждается окончательно.
+     *
+     * @param chatId  ID чата пользователя.
+     * @param data    объект с накопленными данными о записи (мастер, время, услуги).
+     * @param smsCode код подтверждения (может быть null при первой попытке).
+     * @param sender  компонент для отправки уведомлений пользователю.
+     */
     public void confirmBooking(Long chatId, BookingData data, String smsCode, TelegramMessageSender sender) {
-        try {
-            // 1. Создаем или получаем клиента
-            Client client = clientService.saveOrGetClient(data.getPhone(), chatId, data.getFullName(), "no-reply@example.com");
+        log.info("Начало подтверждения записи для chatId: {}, мастерId: {}", chatId, data.getStaffId());
 
-            // 2. Создаем новую запись вместо поиска активной
+        try {
+            // 1. Синхронизируем данные клиента
+            Client client = clientService.saveOrGetClient(
+                    data.getPhone(),
+                    chatId,
+                    data.getFullName(),
+                    "no-reply@example.com"
+            );
+
+            // 2. Инициализируем локальную сущность записи
             Booking booking = bookingService.createBookingFromData(client, data);
 
-            // 3. Создаем запись в Yclients
+            // 3. Пытаемся создать запись в CRM
             boolean success = yclientsService.createBooking(data, client, smsCode);
 
             if (success) {
+                // Обновляем локальную запись данными из CRM
                 booking.setRecordId(data.getRecordId());
                 booking.setRecordHash(data.getRecordHash());
-                booking.setStatus("CONFIRMED");
-                bookingService.saveBooking(booking);
+                booking.setStatus(BookingStatus.CONFIRMED);
 
-                sender.sendMessage(chatId, "✅ Запись подтверждена!");
+                bookingService.saveBooking(booking);
+                sender.sendMessage(chatId, "✅ Запись подтверждена! Ждем вас в назначенное время.");
+                log.info("Запись успешно подтверждена: recordId={}", data.getRecordId());
             } else {
                 sender.sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код или попробуйте позже.");
             }
+
         } catch (YclientsSmsConfirmationException e) {
+            // Перехват требования SMS-верификации
             data.setAwaitingCode(true);
-            sender.sendMessage(chatId, "🔐 Ваш номер требует подтверждения. Пожалуйста, введите код из SMS.");
+            sender.sendMessage(chatId, "🔐 Ваш номер требует подтверждения. Пожалуйста, введите код из SMS, который мы отправили.");
+            log.info("Требуется подтверждение по SMS для chatId: {}", chatId);
+
         } catch (Exception e) {
-            log.error("Ошибка при подтверждении записи для chatId={}", chatId, e);
-            sender.sendMessage(chatId, "❌ Ошибка при создании или подтверждении записи.");
+            log.error("Критическая ошибка при подтверждении записи для chatId={}", chatId, e);
+            sender.sendMessage(chatId, "❌ Произошла ошибка при создании записи. Пожалуйста, свяжитесь с администратором.");
         }
     }
 }
