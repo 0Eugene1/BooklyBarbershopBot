@@ -18,9 +18,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Сервис для взаимодействия с API Yclients.
- * Инкапсулирует логику получения мастеров, услуг, доступных дат и времени,
- * а также создание и отмену бронирований через HTTP клиент.
+ * Высокоуровневый сервис для управления бизнес-логикой взаимодействия с Yclients.
+ * <p>
+ * Класс координирует работу HTTP-клиента, сервиса данных и локальных настроек
+ * барбершопов для выполнения операций записи, отмены и получения расписания.
  */
 @SuppressWarnings("ALL")
 @Service
@@ -32,97 +33,15 @@ public class YclientsService {
     private final YclientsDataService dataService;
     private final BarbershopService barbershopService;
 
-    /**
-     * Токен партнёра для авторизации в Yclients API.
-     * Внедряется из настроек приложения.
-     */
     @Value("${yclients.partner-token}")
     private String partnerToken;
-    /**
-     * Токен пользователя для авторизации в Yclients API.
-     * Внедряется из настроек приложения.
-     */
+
     @Value("${yclients.user-token}")
     private String userToken;
 
-    public List<StaffDto> getStaff(String companyId) {
-        return dataService.getStaffList(companyId); // с обновлением кэша
-    }
-
-    public List<StaffDto> getFreshStaff(String companyId) {
-        return dataService.getStaffListFresh(companyId); // без обновления кэша
-    }
-
-
-    /**
-     * Получить список услуг компании Yclients.
-     *
-     * @param companyId ID компании
-     * @return список DTO услуг
-     */
-    public List<ServiceDto> getServices(String companyId) {
-        return dataService.getServiceList(companyId);
-    }
-
-    /**
-     * Получить имя мастера по ID.
-     *
-     * @param companyId ID компании
-     * @param staffId   ID мастера
-     * @return имя мастера или "Неизвестный мастер", если не найден
-     */
-    public String getStaffName(String companyId, Long staffId) {
-        return dataService.getStaffName(companyId, staffId);
-    }
-
-    /**
-     * Получить название услуги по ID.
-     *
-     * @param companyId ID компании
-     * @param serviceId ID услуги
-     * @return название услуги или "Неизвестная услуга", если не найдена
-     */
-    public String getServiceName(String companyId, Long serviceId) {
-        return dataService.getServiceName(companyId, serviceId);
-    }
-
-    /**
-     * Получить доступное время для записи.
-     *
-     * @param companyId ID компании
-     * @param staffId   ID мастера
-     * @param date      дата в формате yyyy-MM-dd
-     * @param serviceId ID услуги
-     * @return объект с доступным временем записи
-     */
-    //FIXME TEST 11.08
-    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, List<Long> serviceIds) {
-        return httpClient.getAvailableTimes(companyId, staffId, date, serviceIds, partnerToken);
-    }
-
-//    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, Long serviceId) {
-//        return httpClient.getAvailableTimes(companyId, staffId, date, serviceId, partnerToken);
-//    }
-
-    /**
-     * Получить доступные даты для бронирования.
-     *
-     * @param companyId ID компании
-     * @param staffId   ID мастера
-     * @param serviceId ID услуги
-     * @return ApiResponse с данными доступных дат
-     */
-    public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, Long serviceId) {
-        return httpClient.getAvailableBookingDates(companyId, staffId, Collections.singletonList(serviceId));
-    }
-
-    //FIXME TEST 11.08
-    public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, List<Long> serviceIds) {
-        return httpClient.getAvailableBookingDates(companyId, staffId, serviceIds);
-    }
-
     /**
      * Получить сырые JSON данные мастеров (необработанные).
+     * Используется для отладки или получения расширенных полей, не вошедших в DTO.
      *
      * @param companyId ID компании
      * @return JSON строка с данными мастеров
@@ -133,6 +52,7 @@ public class YclientsService {
 
     /**
      * Получить сырые JSON данные услуг (необработанные).
+     * Позволяет увидеть полную структуру категорий и параметров услуг Yclients.
      *
      * @param companyId ID компании
      * @return JSON строка с данными услуг
@@ -142,45 +62,90 @@ public class YclientsService {
     }
 
     /**
-     * Создать бронирование записи в Yclients.
-     * Если для подтверждения требуется SMS-код, бросает YclientsSmsConfirmationException.
-     *
-     * @param data    данные для бронирования
-     * @param client  клиент, делающий бронирование
-     * @param smsCode код подтверждения из SMS, если есть
-     * @return true, если бронирование успешно создано
-     * @throws JsonProcessingException          при ошибках парсинга ответа
-     * @throws YclientsSmsConfirmationException если требуется подтверждение SMS-кодом
+     * Возвращает список мастеров филиала (с использованием кэша имен).
      */
-    // Получение дат и времени можно оставить здесь, либо тоже делегировать, если хочется
+    public List<StaffDto> getStaff(String companyId) {
+        return dataService.getStaffList(companyId);
+    }
+
+    /**
+     * Возвращает актуальный список мастеров без записи в основной кэш.
+     */
+    public List<StaffDto> getFreshStaff(String companyId) {
+        return dataService.getStaffListFresh(companyId);
+    }
+
+    /**
+     * Возвращает каталог услуг филиала.
+     */
+    public List<ServiceDto> getServices(String companyId) {
+        return dataService.getServiceList(companyId);
+    }
+
+    /**
+     * Возвращает имя мастера по его ID.
+     */
+    public String getStaffName(String companyId, Long staffId) {
+        return dataService.getStaffName(companyId, staffId);
+    }
+
+    /**
+     * Возвращает название услуги по её ID.
+     */
+    public String getServiceName(String companyId, Long serviceId) {
+        return dataService.getServiceName(companyId, serviceId);
+    }
+
+    /**
+     * Запрашивает доступные временные слоты для выбранного мастера, даты и списка услуг.
+     */
+    public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, List<Long> serviceIds) {
+        return httpClient.getAvailableTimes(companyId, staffId, date, serviceIds, partnerToken);
+    }
+
+    /**
+     * Запрашивает доступные даты для бронирования.
+     */
+    public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, List<Long> serviceIds) {
+        return httpClient.getAvailableBookingDates(companyId, staffId, serviceIds);
+    }
+
+    /**
+     * Инициирует процесс создания записи в системе Yclients.
+     * <p>
+     * Метод формирует структуру бронирования (appointment) и отправляет её в API.
+     * При успешном создании извлекает record_id и record_hash для последующего управления записью.
+     *
+     * @param data    объект с данными о выбранном филиале, мастере, времени и услугах.
+     * @param client  данные клиента (имя, телефон).
+     * @param smsCode код из SMS (передается при повторном вызове после ввода кода пользователем).
+     * @return true, если запись подтверждена и создана.
+     * @throws YclientsSmsConfirmationException если Yclients требует проверку телефона через SMS.
+     */
     public boolean createBooking(BookingData data, Client client, String smsCode) throws JsonProcessingException {
         Optional<Barbershop> barbershopOpt = barbershopService.getBySlug(data.getSlug());
         if (barbershopOpt.isEmpty()) {
-            log.warn("Барбершоп с слагом {} не найден", data.getSlug());
+            log.warn("Попытка записи в несуществующий филиал: {}", data.getSlug());
             return false;
         }
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
         String formattedDatetime = data.getDatetime().format(formatter);
-
         String companyId = barbershopOpt.get().getYclientsCompanyId();
 
+        // Формирование структуры запроса
         Map<String, Object> bookingPayload = new HashMap<>();
         bookingPayload.put("phone", client.getPhone());
-        log.info("Отправляем в Yclients fullname: {}", client.getFullName());
         bookingPayload.put("fullname", client.getFullName());
         bookingPayload.put("email", client.getEmail());
 
         Map<String, Object> appointment = new HashMap<>();
         appointment.put("id", 1);
-        //FIXME TEST 11.08
         appointment.put("services", data.getServiceIds());
         appointment.put("staff_id", data.getStaffId());
         appointment.put("datetime", formattedDatetime);
 
         bookingPayload.put("appointments", List.of(appointment));
-        log.info("Создаваемая запись: staffId={}, services={}, datetime={}, fullname={}",
-                data.getStaffId(), data.getServiceIds(), data.getDatetime(), client.getFullName());
 
         if (smsCode != null) {
             bookingPayload.put("code", smsCode);
@@ -188,53 +153,45 @@ public class YclientsService {
 
         try {
             String result = httpClient.postBooking(companyId, bookingPayload, partnerToken);
-            log.info("Ответ на создание записи: {}", result);
-
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(result);
             JsonNode dataNode = root.path("data");
 
             if (!dataNode.isMissingNode() && dataNode.isArray() && dataNode.size() > 0) {
                 JsonNode firstRecord = dataNode.get(0);
-                Long recordId = firstRecord.path("record_id").asLong();
-                String recordHash = firstRecord.path("record_hash").asText();
-
-                data.setRecordId(recordId);
-                data.setRecordHash(recordHash);
-
+                // Сохраняем ID и Hash для возможности отмены в будущем
+                data.setRecordId(firstRecord.path("record_id").asLong());
+                data.setRecordHash(firstRecord.path("record_hash").asText());
                 return true;
-            } else {
-                log.warn("Ответ от Yclients не содержит данных записи.");
-                return false;
-            }
-        } catch (WebClientResponseException e) {
-            log.error("Ошибка при создании записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
-            if (e.getRawStatusCode() == 422 && e.getResponseBodyAsString().contains("\"code\":432")) {
-                throw new YclientsSmsConfirmationException();
             }
             return false;
+        } catch (WebClientResponseException e) {
+            if (e.getRawStatusCode() == 422 && e.getResponseBodyAsString().contains("\"code\":432")) {
+                log.info("Yclients запросил SMS-подтверждение для клиента {}", client.getPhone());
+                throw new YclientsSmsConfirmationException();
+            }
+            log.error("Ошибка API при создании записи: {}", e.getResponseBodyAsString());
+            return false;
         } catch (Exception e) {
-            log.error("Ошибка при создании записи", e);
+            log.error("Непредвиденная ошибка при бронировании", e);
             return false;
         }
     }
 
     /**
-     * Отменить бронирование записи в Yclients.
+     * Отменяет существующую запись в системе Yclients.
      *
-     * @param recordId   ID записи
-     * @param recordHash hash записи для управления
-     * @return true, если отмена прошла успешно
+     * @param recordId   уникальный ID записи.
+     * @param recordHash защитный хеш записи.
+     * @return true, если запись была успешно удалена.
      */
-    //Метод удаления
     public boolean cancelBooking(Long recordId, String recordHash) {
         try {
             String url = String.format("/user/records/%d/%s", recordId, recordHash);
-            String result = httpClient.deleteBooking(url, partnerToken, userToken);
-            log.info("Удаление записи успешно: {}", result);
+            httpClient.deleteBooking(url, partnerToken, userToken);
             return true;
-        } catch (WebClientResponseException e) {
-            log.error("Ошибка при удалении записи. Код: {}, Тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            log.error("Не удалось отменить запись {}: {}", recordId, e.getMessage());
             return false;
         }
     }

@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.util.UUID;
 
@@ -27,6 +28,7 @@ import java.util.UUID;
  * @see UUID уникальный идентификатор сущности
  */
 @Entity
+@DynamicUpdate
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -74,5 +76,6 @@ public class Barbershop {
     @Column(length = 500)
     private String reviewsUrl;
 
-
+    // Поле для ID чата администратора
+    private Long adminChatId;
 }

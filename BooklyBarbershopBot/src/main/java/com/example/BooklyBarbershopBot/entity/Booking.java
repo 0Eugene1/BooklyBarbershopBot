@@ -1,5 +1,6 @@
 package com.example.BooklyBarbershopBot.entity;
 
+import com.example.BooklyBarbershopBot.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,54 +22,38 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class Booking {
-    /**
-     * Уникальный идентификатор записи в базе данных.
-     */
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    /**
-     * Дата и время записи в формате строки (ISO или аналогичном).
-     */
-    @Column(name = "datetime", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+
+    @Column(nullable = false,
+            columnDefinition = "TIMESTAMP WITH TIME ZONE")
     private OffsetDateTime datetime;
-    /**
-     * Имя мастера, на которого сделана запись.
-     */
+
+    @Column(nullable = false,
+            name = "end_time",
+            columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    private OffsetDateTime endTime;
+
+    @Column(nullable = false)
+    private Integer totalDurationMinutes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private BookingStatus status;
+
     private String staffName;
-    /**
-     * Название услуги, на которую сделана запись.
-     */
     private String serviceName;
-    /**
-     * Уникальный слаг (slug) барбершопа, к которому относится запись.
-     */
     private String slug;
-    /**
-     * Клиент, сделавший запись.
-     */
+
     @ManyToOne
     private Client client;
-    /**
-     * Идентификатор записи в системе Yclients.
-     */
-    private Long recordId; // ID записи в Yclients
 
-    /**
-     * Хэш для управления записью в Yclients (например, для отмены или изменения).
-     */
-    private String recordHash;// Hash для управления записью
-    /**
-     * Статус записи (например, PENDING, CONFIRMED, CANCELLED).
-     */
-    private String status;      // PENDING, CONFIRMED, CANCELLED
-    /**
-     * Идентификатор мастера в системе Yclients.
-     */
+    private Long recordId;
+    private String recordHash;
+
     private Long staffId;
-    /**
-     * Идентификатор услуги в системе Yclients.
-     */
     private Long serviceId;
 
     @Column(name = "barbershop_id")

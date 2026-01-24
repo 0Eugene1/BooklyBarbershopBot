@@ -1,6 +1,7 @@
 package com.example.BooklyBarbershopBot.telegramBot;
 
 import com.example.BooklyBarbershopBot.callBackData.CallBack;
+import com.example.BooklyBarbershopBot.callBackData.LowRatingReasonCallBackHandler;
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.handlers.BookingConfirmationService;
@@ -11,10 +12,9 @@ import com.example.BooklyBarbershopBot.inlineButtons.InlineKeyboard;
 import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.sendMessage.TelegramMessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import com.example.BooklyBarbershopBot.service.eventService.BotEventService;
-import jakarta.annotation.PostConstruct;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,41 +28,29 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Основной класс Telegram-бота, реализующий функционал обработки входящих сообщений через долгие опросы (Long Polling).
+ * Центральный контроллер Telegram-бота.
  * <p>
- * Этот бот реагирует на текстовые сообщения, в частности на команду <code>/start</code> с возможным параметром —
- * уникальным идентификатором (slug) барбершопа. По этому идентификатору бот ищет данные в сервисе {@link BarbershopService}
- * и отправляет пользователю приветственное сообщение с информацией о найденном барбершопе.
- * <p>
- * Если барбершоп с заданным идентификатором не найден, бот уведомляет об этом пользователя.
- * Если команда <code>/start</code> вызывается без параметров, бот просит уточнить ссылку на барбершоп.
- * <p>
- * Использует Spring для внедрения зависимостей и конфигурации имени и токена бота из application.properties.
- * <p>
- * Логирование ошибок происходит через {@code SLF4J}.
- *
- * @see org.telegram.telegrambots.bots.TelegramLongPollingBot
- * @see BarbershopService
+ * Координирует работу всех подсистем: от парсинга команд и обработки нажатий на кнопки
+ * до сбора персональных данных клиента (имя, телефон) и фиксации событий аналитики.
  */
-
 @SuppressWarnings("LoggingSimilarMessage")
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TelegramBot extends TelegramLongPollingBot implements MessageSender {
+public class TelegramBot extends TelegramLongPollingBot {
 
+    private final CallBack callBack;
+    private final MessageSender messageSender;
     /**
      * Сервис для работы с данными барбершопов.
      */
     private final BarbershopService barbershopService;
     private final InlineKeyboard inlineKeyboard;
-    private final CallBack handleCallBack;
 
-    @Getter
-    private final Map<Long, BookingData> bookingCache = new ConcurrentHashMap<>();
+
+    private final BookingStateService bookingCache;
 
     //Сервисы для хранения данных клиентов и записей
     private final ClientService clientService;
@@ -72,16 +60,15 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
     private final BookingConfirmationService bookingConfirmationService;
     private final BotEventService botEventService;
 
+    private final LowRatingReasonCallBackHandler lowRatingReasonCallBackHandler;
+
+
     @Value("${telegrambots.bots[0].username}")
     private String botUsername;
 
     @Value("${telegrambots.bots[0].token}")
     private String botToken;
 
-    @PostConstruct
-    public void initCallbackLink() {
-        handleCallBack.setTelegramBot(this);
-    }
 
     @Override
     public String getBotUsername() {
@@ -94,36 +81,49 @@ public class TelegramBot extends TelegramLongPollingBot implements MessageSender
         return botToken;
     }
 
-    @Override
+
     public void sendMessage(Long chatId, String text) {
-        SendMessage message = SendMessage.builder().chatId(chatId.toString()).text(text).build();
         try {
-            execute(message);
+            execute(SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text(text)
+                    .build());
         } catch (TelegramApiException e) {
-            log.error("Ошибка при отправке сообщения", e);
+            log.error("Ошибка при отправке", e);
         }
     }
 
 
     /**
-     * Обрабатывает входящие обновления (Update) от Telegram.
-     * <p>
-     * Если обновление содержит текстовое сообщение, оно передаётся в метод {@link #handleTextMessage(Message)} для дальнейшей обработки.
-     *
-     * @param update объект обновления, полученный от Telegram
+     * Точка входа для всех обновлений из Telegram.
+     * Разделяет входящий трафик на CallbackQuery (кнопки) и Message (текст/контакты).
      */
     @Override
     public void onUpdateReceived(Update update) {
+        if (update.hasCallbackQuery()) {
+            callBack.handleCallback(update.getCallbackQuery());
+            return;
+        }
+
         if (update.hasMessage()) {
             handleMessage(update.getMessage());
-        } else if (update.hasCallbackQuery()) {
-            handleCallBack.handleCallback(update.getCallbackQuery());
         }
     }
 
+
+    /**
+     * Обрабатывает текстовые сообщения и контакты.
+     * <p>
+     * Сначала проверяет наличие глобальных команд (/start, /menu),
+     * затем проверяет, не находится ли пользователь в процессе заполнения данных бронирования.
+     */
     private void handleMessage(Message message) {
         Long chatId = message.getChatId();
         String text = message.hasText() ? message.getText().trim() : null;
+
+        if (text != null && lowRatingReasonCallBackHandler.handleTextReason(chatId, text, messageSender)) {
+            return;
+        }
 
         if (text != null && handleCommands(chatId, message, text)) {
             return; // если это была команда, обработка завершена

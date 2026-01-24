@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260114-1
+      author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: feedback
+                columnName: admin_notified
+      changes:
+        - addColumn:
+            tableName: feedback
+            columns:
+              - column:
+                  name: admin_notified
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

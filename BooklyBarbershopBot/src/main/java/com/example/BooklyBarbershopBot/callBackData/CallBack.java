@@ -1,21 +1,19 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 
 import java.util.List;
 
 /**
- * Класс-распределитель callback-запросов от Telegram.
+ * Центральный диспетчер (Router) callback-запросов от Telegram.
  * <p>
- * Получает входящие callbackQuery и делегирует их обработку первому подходящему обработчику
- * из списка {@link CallBackHandler}. Если ни один обработчик не поддерживает данные callback,
- * отправляет пользователю сообщение о неизвестной команде.
+ * Класс реализует паттерн "Цепочка обязанностей", управляя коллекцией реализаций {@link CallBackHandler}.
+ * Он отвечает за маршрутизацию входящих нажатий кнопок к соответствующим специализированным обработчикам
+ * на основе содержимого {@code callbackData}.
  */
 @Slf4j
 @Component
@@ -23,90 +21,48 @@ import java.util.List;
 public class CallBack {
 
     /**
-     * Список обработчиков callback-запросов
+     * Коллекция всех зарегистрированных обработчиков.
+     * Spring автоматически внедряет сюда все бины, реализующие интерфейс {@link CallBackHandler}.
      */
     private final List<CallBackHandler> handlers;
 
-
     /**
-     * Ссылка на основной Telegram-бот для отправки сообщений
+     * Сервис для отправки ответных сообщений пользователю.
      */
-    @Setter
-    private TelegramBot telegramBot;
+    private final MessageSender messageSender;
+
 
     /**
-     * Основной метод обработки callback-запроса.
-     * Делегирует обработку первому обработчику, поддерживающему данные.
+     * Основной метод маршрутизации callback-запроса.
+     * <p>
+     * Итерирует по списку обработчиков и вызывает первый, чей метод {@code supports()} вернет {@code true}.
+     * Обеспечивает глобальную обработку исключений (Exception Handling), чтобы сбой в одном
+     * обработчике не привел к падению всего потока обработки обновлений.
      *
-     * @param callbackQuery входящий callbackQuery от Telegram
+     * @param callbackQuery объект запроса, содержащий данные нажатой кнопки и контекст чата.
      */
     public void handleCallback(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
 
-//        // Обработка отмены записи
-//        if (data.startsWith("cancel_")) {
-//            String[] parts = data.split("_");
-//            if (parts.length == 3) {
-//                try {
-//                    Long recordId = Long.parseLong(parts[1]);
-//                    String recordHash = parts[2];
-//
-//                    // Отменяем запись
-//                    bookingService.cancelBooking(recordId, recordHash);
-//
-//                    // Логируем событие BOOKING_CANCELLED
-//                    Map<String, Object> eventData = new HashMap<>();
-//                    eventData.put("recordId", recordId);
-//                    eventData.put("recordHash", recordHash);
-//                    UUID barbershopId = bookingService.getBookingByRecordId(recordId)
-//                            .map(booking -> bookingService.getBarbershopIdBySlug(booking.getSlug()))
-//                            .orElse(null);
-//                    botEventService.saveEvent(chatId, barbershopId, "BOOKING_CANCELLED", eventData);
-//
-//                    telegramBot.sendMessage(chatId, "Запись успешно отменена.");
-//                } catch (IllegalArgumentException | IllegalStateException e) {
-//                    log.error("Ошибка при отмене записи для chatId={}: {}", chatId, e.getMessage());
-//                    telegramBot.sendMessage(chatId, "Ошибка: " + e.getMessage());
-//                } catch (Exception e) {
-//                    log.error("Неожиданная ошибка при отмене записи для chatId={}: {}", chatId, e.getMessage());
-//                    telegramBot.sendMessage(chatId, "❌ Произошла ошибка при отмене записи. Попробуйте позже.");
-//                }
-//            } else {
-//                log.warn("Неверный формат callbackData: {} для chatId={}", data, chatId);
-//                telegramBot.sendMessage(chatId, "Ошибка: неверный формат данных.");
-//            }
-//            return;
-//        }
+        log.debug("Получен callback: data='{}' от chatId={}", data, chatId);
 
         for (CallBackHandler handler : handlers) {
             if (handler.supports(data)) {
                 try {
-                    handler.handle(callbackQuery, telegramBot);
+                    handler.handle(callbackQuery, messageSender);
                 } catch (Exception e) {
-                    log.error("Ошибка при обработке callbackData={} для chatId={}", data, chatId, e);
-                    try {
-                        telegramBot.execute(SendMessage.builder()
-                                .chatId(chatId.toString())
-                                .text("❌ Произошла ошибка. Попробуйте позже.")
-                                .build());
-                    } catch (Exception ex) {
-                        log.error("Ошибка при отправке сообщения об ошибке для chatId={}", chatId, ex);
-                    }
+                    log.error(
+                            "Критическая ошибка при обработке callbackData='{}' для chatId={}. Обработчик: {}",
+                            data, chatId, handler.getClass().getSimpleName(), e
+                    );
+                    messageSender.sendMessage(chatId, "❌ Произошла ошибка при выполнении операции. Попробуйте позже.");
                 }
                 return;
             }
         }
 
-        log.warn("Не найден обработчик для callbackData={} и chatId={}", data, chatId);
-        try {
-            telegramBot.execute(SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("⚠️ Некорректный запрос.")
-                    .build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения о некорректном запросе для chatId={}", chatId, e);
-        }
+        log.warn("Маршрут не найден: callbackData='{}' не поддерживается ни одним обработчиком.", data);
+        messageSender.sendMessage(chatId, "⚠️ К сожалению, эта кнопка устарела или не поддерживается.");
     }
-
 }

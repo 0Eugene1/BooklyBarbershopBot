@@ -17,9 +17,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * HTTP клиент для работы с API Yclients.
- * Использует WebClient для выполнения REST-запросов с авторизацией по токенам партнера и пользователя.
- * Поддерживает операции получения мастеров, услуг, доступных дат и времени записи, а также бронирование и отмену записи.
+ * Низкоуровневый HTTP-клиент для прямого взаимодействия с API Yclients.
+ * <p>
+ * Класс инкапсулирует логику авторизации по схеме Bearer + User Token и реализует
+ * основные методы протокола Yclients: получение справочников, поиск слотов и создание записей.
  */
 @SuppressWarnings("deprecation")
 @Slf4j
@@ -28,6 +29,7 @@ import java.util.Map;
 public class YclientsHttpClient {
 
     private WebClient webClient;
+
     @Value("${YCLIENTS_PARTNER_TOKEN}")
     private String partnerToken;
 
@@ -36,8 +38,10 @@ public class YclientsHttpClient {
 
     @Value("${YCLIENTS_BASE_URL:https://api.yclients.com/api/v1}")
     private String baseUrl;
+
     /**
-     * Инициализация WebClient с базовым URL и заголовками авторизации.
+     * Конфигурирует WebClient после инициализации бина.
+     * Устанавливает базовый URL и обязательные заголовки для API версии 2.
      */
     @PostConstruct
     public void init() {
@@ -48,102 +52,109 @@ public class YclientsHttpClient {
     }
 
     /**
-     * Получить сырые данные услуг компании.
-     *
-     * @param companyId ID компании Yclients
-     * @return JSON строка с данными услуг
+     * Запрашивает полный список услуг компании.
      */
     public String getServicesRaw(String companyId) {
-        return webClient.get().uri("/company/{companyId}/services", companyId).retrieve().bodyToMono(String.class).doOnNext(body -> log.info("Ответ YClients (services): {}", body)).block();
+        return webClient.get()
+                .uri("/company/{companyId}/services", companyId)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(body -> log.info("Загружены услуги для компании {}", companyId))
+                .block();
     }
 
     /**
-     * Получить сырые данные мастеров компании.
-     *
-     * @param companyId ID компании Yclients
-     * @return JSON строка с данными мастеров
+     * Запрашивает список сотрудников, доступных для бронирования в филиале.
      */
     public String getStaffRaw(String companyId) {
-        return webClient.get().uri("/book_staff/{companyId}", companyId).retrieve().bodyToMono(String.class).doOnNext(body -> log.info("Ответ YClients (staff): {}", body)).block();
+        return webClient.get()
+                .uri("/book_staff/{companyId}", companyId)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(body -> log.info("Загружен список мастеров для компании {}", companyId))
+                .block();
     }
 
     /**
-     * Получить доступные даты для бронирования по параметрам.
+     * Получает список дат, на которые возможна запись к конкретному мастеру на определенные услуги.
      *
-     * @param companyId  ID компании
-     * @param staffId    ID мастера
-     * @param serviceIds ID услуги
-     * @return объект с данными о доступных датах
+     * @param companyId  ID филиала.
+     * @param staffId    ID мастера.
+     * @param serviceIds список ID услуг.
+     * @return {@link ApiResponse} с вложенными датами бронирования.
      */
-    //FIXME TEST 11.08
     public ApiResponse<BookDatesData> getAvailableBookingDates(String companyId, Long staffId, List<Long> serviceIds) {
         try {
             return webClient.get().uri(uriBuilder -> {
-                var builder = uriBuilder.path("/book_dates/" + companyId).queryParam("staff_id", staffId);
-
-                // добавляем каждый serviceId как отдельный service_ids[]
-                for (Long id : serviceIds) {
-                    builder.queryParam("service_ids[]", id);
-                }
-
-                return builder.build();
-            }).retrieve().bodyToMono(new ParameterizedTypeReference<ApiResponse<BookDatesData>>() {
-            }).doOnNext(response -> log.info("Доступные даты бронирования: {}", response)).block();
-
+                        var builder = uriBuilder.path("/book_dates/" + companyId).queryParam("staff_id", staffId);
+                        for (Long id : serviceIds) {
+                            builder.queryParam("service_ids[]", id);
+                        }
+                        return builder.build();
+                    }).retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ApiResponse<BookDatesData>>() {})
+                    .doOnNext(response -> log.debug("Получены доступные даты для мастера {}", staffId))
+                    .block();
         } catch (WebClientResponseException e) {
-            log.error("Ошибка при запросе дат бронирования. Код: {}, тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
+            log.error("Ошибка API при получении дат: {}", e.getMessage());
             throw e;
         }
     }
 
     /**
-     * Получить доступное время для бронирования.
-     *
-     * @param companyId    ID компании
-     * @param staffId      ID мастера
-     * @param date         дата в формате yyyy-MM-dd
-     * @param serviceIds   ID услуги
-     * @param partnerToken токен партнёра для авторизации
-     * @return объект с данными о доступных временных слотах
+     * Запрашивает доступные временные интервалы (сеансы) на выбранную дату.
      */
-    //FIXME TEST 11.08
     public BookTimeResponse getAvailableTimes(String companyId, Long staffId, String date, List<Long> serviceIds, String partnerToken) {
         this.partnerToken = partnerToken;
         try {
             return webClient.get().uri(uriBuilder -> {
-                var builder = uriBuilder.path("/book_times/" + companyId + "/" + staffId + "/" + date);
-                for (Long serviceId : serviceIds) {
-                    builder = builder.queryParam("service_ids[]", serviceId);
-                }
-                return builder.build();
-            }).retrieve().bodyToMono(BookTimeResponse.class).doOnNext(response -> log.info("Доступные сеансы: {}", response)).block();
+                        var builder = uriBuilder.path("/book_times/" + companyId + "/" + staffId + "/" + date);
+                        for (Long serviceId : serviceIds) {
+                            builder = builder.queryParam("service_ids[]", serviceId);
+                        }
+                        return builder.build();
+                    }).retrieve()
+                    .bodyToMono(BookTimeResponse.class)
+                    .doOnNext(response -> log.debug("Получены временные слоты на дату {}", date))
+                    .block();
         } catch (WebClientResponseException e) {
-            log.error("Ошибка при запросе времени бронирования. Код: {}, тело: {}", e.getRawStatusCode(), e.getResponseBodyAsString());
+            log.error("Ошибка API при получении времени: {}", e.getMessage());
             throw e;
         }
     }
 
     /**
-     * Отправить POST-запрос для создания бронирования.
+     * Создает новую запись (бронирование) в системе Yclients.
      *
-     * @param companyId    ID компании
-     * @param payload      тело запроса с данными бронирования
-     * @param partnerToken токен партнёра для авторизации
-     * @return ответ в виде строки JSON
+     * @param companyId ID филиала.
+     * @param payload   карта с данными (fullname, phone, datetime, services и т.д.).
+     * @param partnerToken динамический токен партнера.
+     * @return JSON-строка с результатом создания записи (record_id).
      */
     public String postBooking(String companyId, Map<String, Object> payload, String partnerToken) {
-        return webClient.post().uri("/book_record/" + companyId).header("Authorization", "Bearer " + partnerToken).contentType(MediaType.APPLICATION_JSON).bodyValue(payload).retrieve().bodyToMono(String.class).doOnNext(response -> log.info("📩 Ответ от YClients на бронирование: {}", response)).block();
+        return webClient.post()
+                .uri("/book_record/" + companyId)
+                .header("Authorization", "Bearer " + partnerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(response -> log.info("Создана запись в YClients для компании {}", companyId))
+                .block();
     }
 
     /**
-     * Отменить бронирование по URL.
-     *
-     * @param url          полный URL для удаления записи
-     * @param partnerToken токен партнёра
-     * @param userToken    токен пользователя
-     * @return ответ сервера в виде строки JSON
+     * Удаляет (отменяет) существующую запись.
      */
     public String deleteBooking(String url, String partnerToken, String userToken) {
-        return webClient.delete().uri(url).header("Authorization", "Bearer " + partnerToken + ", User " + userToken).header("Accept", "application/vnd.yclients.v2+json").header("Content-Type", "application/json").retrieve().bodyToMono(String.class).block();
+        return webClient.delete()
+                .uri(url)
+                .header("Authorization", "Bearer " + partnerToken + ", User " + userToken)
+                .header("Accept", "application/vnd.yclients.v2+json")
+                .header("Content-Type", "application/json")
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnNext(res -> log.info("Запись успешно отменена по URL: {}", url))
+                .block();
     }
 }

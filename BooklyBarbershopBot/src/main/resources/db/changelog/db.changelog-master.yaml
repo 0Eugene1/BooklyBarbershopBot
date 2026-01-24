@@ -19,3 +19,24 @@ databaseChangeLog:
 
   - include:
       file: db/changelog/changes/20250827-barbershop-users.yaml
+
+  - include:
+      file: db/changelog/changes/20251212-1-add-admin-chat-id.yaml
+
+  - include:
+      file: db/changelog/changes/20251212-2-add-feedback.yaml
+
+  - include:
+      file: db/changelog/changes/20260114-1-update-feedback.yaml
+
+  - include:
+      file: db/changelog/changes/20260118-1-make-chat-id-nullable.yaml
+
+  - include:
+      file: db/changelog/changes/20260121-2-add-adminchatid-barbershop.yaml
+
+  - include:
+      file: db/changelog/changes/20260121-3-add-fields-booking.yaml
+
+  - include:
+      file: db/changelog/changes/20260121-1-idx-booking.yaml

@@ -2,25 +2,28 @@ package com.example.BooklyBarbershopBot.repository;
 
 import com.example.BooklyBarbershopBot.entity.Barbershop;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Репозиторий для работы с сущностью {@link Barbershop}.
+ * Интерфейс репозитория для управления персистентным состоянием филиалов.
  * <p>
- * Расширяет {@link JpaRepository} для предоставления стандартных CRUD операций
- * и содержит дополнительный метод для поиска барбершопа по уникальному Telegram slug.
- * <p>
- * Используется для доступа к данным барбершопов в базе данных.
+ * Обеспечивает связующее звено между объектной моделью {@link Barbershop}
+ * и реляционной таблицей в базе данных.
  */
+@Repository
 public interface BarbershopRepository extends JpaRepository<Barbershop, UUID> {
 
     /**
-     * Находит барбершоп по уникальному Telegram slug.
+     * Выполняет поиск филиала по его текстовому идентификатору (Deep Link slug).
+     * <p>
+     * Данный метод критически важен для маршрутизации входящих запросов
+     * при обработке команды {@code /start slug}.
      *
-     * @param findByTelegramSlug уникальный идентификатор (slug) барбершопа, используемый в Telegram-боте
-     * @return {@link Optional} с найденным {@link Barbershop} или пустой, если барбершоп с таким slug не найден
+     * @param telegramSlug уникальное имя филиала в системе Telegram.
+     * @return {@link Optional}, содержащий объект барбершопа, если он зарегистрирован.
      */
-    Optional<Barbershop> findByTelegramSlug(String findByTelegramSlug);
+    Optional<Barbershop> findByTelegramSlug(String telegramSlug);
 }

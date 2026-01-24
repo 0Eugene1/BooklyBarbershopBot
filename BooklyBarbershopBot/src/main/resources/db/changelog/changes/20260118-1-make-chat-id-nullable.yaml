@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260118-1
+      author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - and:
+            - tableExists:
+                tableName: feedback
+            - columnExists:
+                tableName: feedback
+                columnName: chat_id
+      changes:
+        - dropNotNullConstraint:
+            tableName: feedback
+            columnName: chat_id
+            columnDataType: BIGINT

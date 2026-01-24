@@ -2,12 +2,19 @@ databaseChangeLog:
   - changeSet:
       id: 20250822-1
       author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: booking
+                columnName: barbershop_id
       changes:
         - addColumn:
             tableName: booking
             columns:
               - column:
                   name: barbershop_id
-                  type: UUID
+                  type: uuid          # UUID в нижнем регистре — стандарт для Liquibase/PostgreSQL
                   constraints:
                     nullable: true

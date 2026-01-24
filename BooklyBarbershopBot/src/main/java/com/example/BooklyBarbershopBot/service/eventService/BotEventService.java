@@ -15,6 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Сервис для регистрации и хранения событий взаимодействия пользователя с ботом.
+ * <p>
+ * Обеспечивает асинхронный (рекомендуется) сбор аналитических данных
+ * и логов активности в разрезе конкретных филиалов.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -23,10 +29,20 @@ public class BotEventService {
     private final BotEventRepository repository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Сохраняет событие в базу данных с поддержкой автоматических повторов при сбоях.
+     *
+     * @param chatId       уникальный идентификатор чата Telegram.
+     * @param barbershopId UUID филиала, в котором произошло событие.
+     * @param eventType    тип события (например, "BOOKING_STARTED", "BUTTON_CLICKED").
+     * @param eventData    дополнительные метаданные события в виде карты.
+     * @throws IllegalArgumentException если chatId или eventType пусты.
+     * @throws RuntimeException         при критической ошибке записи.
+     */
     @Retryable(value = DataAccessException.class, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public void saveEvent(Long chatId, UUID barbershopId, String eventType, Map<String, Object> eventData) {
         if (chatId == null || eventType == null || eventType.trim().isEmpty()) {
-            log.error("Invalid input: chatId or eventType is null or empty");
+            log.error("Некорректные входные данные: chatId или eventType пуст");
             throw new IllegalArgumentException("chatId and eventType must not be null or empty");
         }
 
@@ -36,23 +52,37 @@ public class BotEventService {
             event.setBarbershopId(barbershopId);
             event.setEventType(eventType);
             event.setEventData(convertToJsonb(eventData));
+
             repository.save(event);
-            log.info("Event saved: chatId={}, barbershopId={}, eventType={}", chatId, barbershopId, eventType);
+            log.info("Событие сохранено: chatId={}, type={}", chatId, eventType);
         } catch (Exception e) {
-            log.error("Failed to save event: chatId={}, barbershopId={}, eventType={}", chatId, barbershopId, eventType, e);
+            log.error("Ошибка при сохранении события: type={}", eventType, e);
             throw new RuntimeException("Error saving bot event", e);
         }
     }
 
+    /**
+     * Извлекает список событий определенного типа для конкретного барбершопа.
+     *
+     * @param barbershopId UUID филиала.
+     * @param eventType    тип искомых событий.
+     * @return список сущностей {@link BotEvent}.
+     */
     public List<BotEvent> getEventsByType(UUID barbershopId, String eventType) {
         return repository.findByBarbershopIdAndEventType(barbershopId, eventType);
     }
 
+    /**
+     * Конвертирует Map с данными в древовидную структуру JSON (JsonNode).
+     *
+     * @param eventData карта данных.
+     * @return объект {@link JsonNode} для сохранения в поле JSONB.
+     */
     private JsonNode convertToJsonb(Map<String, Object> eventData) {
         try {
             return eventData != null ? objectMapper.valueToTree(eventData) : objectMapper.createObjectNode();
         } catch (Exception e) {
-            log.error("Failed to convert eventData to JSONB", e);
+            log.error("Ошибка конвертации eventData в JSONB", e);
             return objectMapper.createObjectNode();
         }
     }

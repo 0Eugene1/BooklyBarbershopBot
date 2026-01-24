@@ -1,6 +1,8 @@
 package com.example.BooklyBarbershopBot.config;
 
 import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
+import com.example.BooklyBarbershopBot.telegramBot.adminBot.AdminBot;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
@@ -8,49 +10,62 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-
 /**
- * Конфигурационный класс Spring, который инициализирует и регистрирует Telegram-бота в Telegram Bots API.
+ * Главный конфигурационный класс для Telegram-ботов системы.
  * <p>
- * В рамках этого класса создаётся бин {@link TelegramBotsApi}, который управляет сессией бота и
- * позволяет принимать обновления (updates) через механизм Long Polling.
- * <p>
- * Используется {@link DefaultBotSession} для запуска сессии по умолчанию.
- * <p>
- * При создании бина TelegramBotsApi происходит регистрация переданного экземпляра {@link TelegramBot}
- * в Telegram API, что позволяет боту начать принимать и обрабатывать сообщения.
- * <p>
- * Исключения, связанные с API Telegram, пробрасываются наружу для последующей обработки Spring.
- *
- * @see TelegramBotsApi
- * @see TelegramBot
- * @see DefaultBotSession
+ * Создает необходимые бины для работы библиотеки telegrambots-spring-boot-starter.
+ * Отвечает за:
+ * 1. Настройку параметров соединения и многопоточности.
+ * 2. Регистрацию клиентского и административного ботов в едином API-сервисе.
  */
-
 @Configuration
+@Slf4j
 public class TelegramBotConfig {
 
+    /**
+     * Создает настройки по умолчанию для ботов.
+     * <p>
+     * Здесь задаются параметры:
+     * - {@code maxThreads}: ограничение количества потоков для обработки входящих обновлений.
+     * - {@code getUpdatesTimeout}: время ожидания ответа от сервера (long polling).
+     *
+     * @return настроенный объект {@link DefaultBotOptions}.
+     */
     @Bean
     public DefaultBotOptions defaultBotOptions() {
         DefaultBotOptions botOptions = new DefaultBotOptions();
-        botOptions.setMaxThreads(2); // Уменьшаем число потоков для минимизации конфликтов
-        botOptions.setGetUpdatesTimeout(20); // Таймаут поллинга 20 секунд
+        botOptions.setMaxThreads(2);
+        botOptions.setGetUpdatesTimeout(20);
         return botOptions;
     }
 
     /**
-     * Создаёт и регистрирует экземпляр {@link TelegramBotsApi} с переданным ботом {@link TelegramBot}.
+     * Инициализирует и регистрирует ботов в системе Telegram.
      * <p>
-     * Это позволяет Telegram-боту начать получать обновления и взаимодействовать с пользователями.
+     * Метод автоматически вызывается Spring при старте приложения.
+     * Если регистрация одного из ботов завершится ошибкой, приложение выбросит {@link TelegramApiException}.
      *
-     * @param telegramBot экземпляр бота, который будет зарегистрирован в Telegram API
-     * @return объект TelegramBotsApi, управляющий регистрацией и получением обновлений для бота
-     * @throws TelegramApiException исключение, выбрасываемое при ошибках регистрации бота в Telegram API
+     * @param userBot  экземпляр клиентского бота (инъекция бина).
+     * @param adminBot экземпляр административного бота (инъекция бина).
+     * @return объект {@link TelegramBotsApi} с зарегистрированными ботами.
+     * @throws TelegramApiException если регистрация в Telegram API не удалась.
      */
     @Bean
-    public TelegramBotsApi telegramBotsApi(TelegramBot telegramBot) throws TelegramApiException {
+    public TelegramBotsApi telegramBotsApi(TelegramBot userBot, AdminBot adminBot) throws TelegramApiException {
+        log.debug("Инициализация TelegramBotsApi...");
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-        botsApi.registerBot(telegramBot);
+
+        try {
+            botsApi.registerBot(userBot);
+            log.info("Основной бот @{} успешно зарегистрирован", userBot.getBotUsername());
+
+            botsApi.registerBot(adminBot);
+            log.info("Админ-бот @{} успешно зарегистрирован", adminBot.getBotUsername());
+        } catch (TelegramApiException e) {
+            log.error("Критическая ошибка при регистрации ботов: {}", e.getMessage());
+            throw e;
+        }
+
         return botsApi;
     }
 }

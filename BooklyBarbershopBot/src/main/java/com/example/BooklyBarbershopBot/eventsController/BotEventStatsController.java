@@ -10,6 +10,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * REST-контроллер для получения аналитических данных о работе бота.
+ * <p>
+ * Предоставляет API-конечные точки для интеграции с фронтенд-панелями управления.
+ * Позволяет извлекать количественные метрики активности пользователей в разрезе
+ * конкретного филиала (барбершопа).
+ */
 @RestController
 @RequestMapping("/api/stats")
 @RequiredArgsConstructor
@@ -17,21 +24,18 @@ public class BotEventStatsController {
 
     private final BotEventStatsService statsService;
 
-    //Веб-фронтенд или админ-панель делает GET-запрос на /api/stats/{barbershopId}.
-    //
-    //Контроллер вызывает сервис BotEventStatsService и собирает:
-    //
-    //количество уникальных пользователей (uniqueUsers)
-    //
-    //количество успешных бронирований (bookings)
-    //
-    //количество событий по типам (eventsByType)
-    //
-    //Всё возвращается в JSON, готовое для фронтенда.
-
     /**
-     * Возвращает статистику по событиям для конкретного барбершопа.
-     * Пример URL: /api/stats/123
+     * Формирует агрегированный отчет по ключевым метрикам заведения.
+     * <p>
+     * Данные включают:
+     * <ul>
+     * <li>Общее количество уникальных клиентов, взаимодействовавших с ботом.</li>
+     * <li>Счетчик успешно завершенных процессов бронирования.</li>
+     * <li>Распределение всех действий по типам (клики, выборы услуг, ошибки).</li>
+     * </ul>
+     *
+     * @param barbershopId уникальный UUID филиала.
+     * @return {@link StatsResponse} объект, сериализуемый в JSON.
      */
     @GetMapping("/{barbershopId}")
     public StatsResponse getStats(@PathVariable UUID barbershopId) {
@@ -42,6 +46,15 @@ public class BotEventStatsController {
         return new StatsResponse(uniqueUsers, bookings, eventsByType);
     }
 
-    // DTO для ответа
-    public record StatsResponse(Long uniqueUsers, Long bookings, Map<String, Long> eventsByType) {}
+    /**
+     * Data Transfer Object (DTO) для передачи статистики.
+     * * @param uniqueUsers общее кол-во уникальных пользователей.
+     * @param bookings кол-во успешных записей.
+     * @param eventsByType карта, где ключ — тип события, значение — количество.
+     */
+    public record StatsResponse(
+            Long uniqueUsers,
+            Long bookings,
+            Map<String, Long> eventsByType
+    ) {}
 }

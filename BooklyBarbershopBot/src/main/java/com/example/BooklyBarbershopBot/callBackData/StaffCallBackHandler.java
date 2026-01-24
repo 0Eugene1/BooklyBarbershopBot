@@ -3,13 +3,13 @@ package com.example.BooklyBarbershopBot.callBackData;
 import com.example.BooklyBarbershopBot.dto.BookingData;
 import com.example.BooklyBarbershopBot.dto.ServiceDto;
 import com.example.BooklyBarbershopBot.dto.StaffDto;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.ParsingDtoService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -19,11 +19,11 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Обработчик callback-запросов для выбора мастера.
+ * Обработчик выбора мастера пользователем.
  * <p>
- * Поддерживает callbackData, начинающиеся с "staff_".
- * Загружает услуги, доступные выбранному мастеру, и формирует клавиатуру
- * с кнопками услуг для дальнейшего выбора.
+ * Реагирует на callback-запросы с префиксом {@code staff_}.
+ * Класс извлекает список услуг, которые оказывает данный мастер в конкретном филиале,
+ * и предоставляет пользователю инлайн-клавиатуру для выбора сервиса.
  */
 @Slf4j
 @Component
@@ -32,12 +32,11 @@ public class StaffCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final ParsingDtoService parsingDtoService;
+    private final BookingStateService bookingStateService;
 
     /**
-     * Проверяет, начинается ли callbackData с "staff_".
-     *
-     * @param data данные callback
-     * @return true, если поддерживается обработка выбора мастера
+     * Проверяет, является ли callback-запрос выбором мастера.
+     * * @param data строка формата "staff_{id}_{slug}"
      */
     @Override
     public boolean supports(String data) {
@@ -45,21 +44,24 @@ public class StaffCallBackHandler implements CallBackHandler {
     }
 
     /**
-     * Обрабатывает callbackQuery, извлекает ID мастера и slug барбершопа,
-     * получает список услуг мастера и отправляет пользователю клавиатуру с услугами.
-     *
-     * @param callbackQuery объект callbackQuery
-     * @param bot           экземпляр TelegramBot
+     * Обрабатывает выбор мастера и загружает доступные ему услуги.
+     * <p>
+     * Алгоритм:
+     * 1. Парсинг {@code staffId} и идентификатора филиала.
+     * 2. Получение всех услуг компании через {@link ParsingDtoService}.
+     * 3. Фильтрация услуг: остаются только те, где в списке персонала присутствует данный мастер.
+     * 4. Инициализация/обновление состояния бронирования в {@link BookingStateService}.
+     * 5. Отправка клавиатуры услуг с указанием их стоимости.
      */
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
 
         try {
             String[] parts = data.split("_", 3);
             if (parts.length < 3) {
-                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
+                messageSender.sendMessage(chatId, "⚠️ Ошибка в данных callback.");
                 return;
             }
 
@@ -79,12 +81,12 @@ public class StaffCallBackHandler implements CallBackHandler {
                             }).toList();
 
                     if (staffServices.isEmpty()) {
-                        sendMessage(bot, chatId, "🔍 У этого мастера пока нет доступных услуг.");
+                        messageSender.sendMessage(chatId, "🔍 У этого мастера пока нет доступных услуг.");
                         return;
                     }
 
-                    // Получаем или создаём bookingData //TODO 11.08 для чего ?
-                    BookingData bookingData = bot.getBookingCache().getOrDefault(chatId, new BookingData());
+                    BookingData bookingData = bookingStateService.getOrCreate(chatId);
+
                     if (bookingData.getServiceIds() == null) {
                         bookingData.setServiceIds(new ArrayList<>());
                     }
@@ -98,40 +100,23 @@ public class StaffCallBackHandler implements CallBackHandler {
                         rows.add(Collections.singletonList(button));
                     }
 
-                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-                    keyboard.setKeyboard(rows);
+                    messageSender.sendMessage(
+                            chatId,
+                            "💇 Услуги мастера:",
+                            InlineKeyboardMarkup.builder()
+                                    .keyboard(rows)
+                                    .build()
+                    );
 
-                    SendMessage message = SendMessage.builder()
-                            .chatId(chatId.toString())
-                            .text("💇 Услуги мастера:")
-                            .replyMarkup(keyboard)
-                            .build();
-
-                    bot.execute(message);
                 } catch (Exception e) {
                     log.error("Ошибка при получении услуг мастера", e);
-                    sendMessage(bot, chatId, "❌ Не удалось получить услуги мастера. Попробуйте позже.");
+                    messageSender.sendMessage(chatId, "❌ Не удалось получить услуги мастера. Попробуйте позже.");
                 }
-            }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
+            }, () -> messageSender.sendMessage(chatId, "❌ Барбершоп не найден."));
 
         } catch (Exception e) {
             log.error("Ошибка при обработке callback staff_", e);
-            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
-        }
-    }
-
-    /**
-     * Вспомогательный метод для отправки сообщения пользователю.
-     *
-     * @param bot    экземпляр TelegramBot
-     * @param chatId идентификатор чата
-     * @param text   текст сообщения
-     */
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
-        try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
+            messageSender.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
     }
 

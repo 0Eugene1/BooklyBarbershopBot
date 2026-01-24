@@ -1,13 +1,13 @@
 package com.example.BooklyBarbershopBot.callBackData;
 
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 
 import java.time.OffsetDateTime;
@@ -16,12 +16,10 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Обработчик callback-запросов для выбора конкретного временного слота записи.
+ * Обработчик окончательного выбора временного слота.
  * <p>
- * Поддерживает callbackData, начинающиеся с "slot_".
- * Извлекает дату, время, идентификаторы мастера и услуги, а также slug барбершопа.
- * Создаёт объект BookingData с выбранными параметрами, сохраняет его в кеш бронирования,
- * запрашивает у пользователя ввод имени.
+ * Данный класс фиксирует выбранное время записи, агрегирует все накопленные данные
+ * (мастер, услуги, дата) и переводит диалог в режим сбора персональных данных клиента.
  */
 @Slf4j
 @Component
@@ -30,12 +28,11 @@ public class SlotCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
+    private final BookingStateService bookingStateService;
 
     /**
-     * Проверяет, начинается ли callbackData с "slot_".
-     *
-     * @param data данные callback
-     * @return true, если поддерживается обработка выбора временного слота
+     * Поддерживает обработку конкретных временных слотов.
+     * @param data строка формата "slot_yyyy-MM-dd_HH-mm_staffId_slug"
      */
     @Override
     public boolean supports(String data) {
@@ -43,25 +40,24 @@ public class SlotCallBackHandler implements CallBackHandler {
     }
 
     /**
-     * Обрабатывает callbackQuery, восстанавливает дату и время из callbackData,
-     * получает имена мастера и услуги, сохраняет данные в кеш бронирования,
-     * запрашивает у пользователя ввод имени.
-     *
-     * @param callbackQuery объект callbackQuery
-     * @param bot           экземпляр TelegramBot
+     * Выполняет финальную сборку объекта бронирования перед подтверждением.
+     * <p>
+     * Шаги обработки:
+     * 1. Декодирование времени из "безопасного" строкового формата.
+     * 2. Валидация и коррекция часового пояса для работы с OffsetDateTime.
+     * 3. Получение человекочитаемых названий (мастер, услуги) через API.
+     * 4. Сохранение полного контекста в {@link BookingStateService}.
+     * 5. Активация состояния {@code awaitingFullName} для приема имени пользователя.
      */
-
-
-    //FIXME TEST 11.08
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
 
         try {
             String[] parts = data.split("_", 6);
             if (parts.length < 5) {
-                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
+                messageSender.sendMessage(chatId, "⚠️ Ошибка в данных callback.");
                 return;
             }
 
@@ -85,7 +81,7 @@ public class SlotCallBackHandler implements CallBackHandler {
                 String companyId = barbershop.getYclientsCompanyId();
 
                 // Получаем BookingData из кеша, он должен уже содержать выбранные услуги
-                BookingData bookingData = bot.getBookingCache().get(chatId);
+                BookingData bookingData = bookingStateService.get(chatId);
                 if (bookingData == null) {
                     bookingData = new BookingData();
                 }
@@ -95,7 +91,6 @@ public class SlotCallBackHandler implements CallBackHandler {
                 bookingData.setDatetime(offsetDateTime);
                 bookingData.setStaffName(yclientsService.getStaffName(companyId, staffId));
 
-                // --- новый блок ---
                 if (bookingData.getServiceIds() != null && !bookingData.getServiceIds().isEmpty()) {
                     List<String> serviceNames = bookingData.getServiceIds().stream()
                             .map(serviceId -> {
@@ -111,43 +106,36 @@ public class SlotCallBackHandler implements CallBackHandler {
                 } else {
                     bookingData.setServiceNames(Collections.emptyList());
                 }
-// --- конец нового блока ---
-
-                bot.getBookingCache().put(chatId, bookingData);
+                bookingStateService.put(chatId, bookingData);
 
                 bookingData.setAwaitingFullName(true);
-                bot.getBookingCache().put(chatId, bookingData);
-//                 --- Создаём новый BookingData для текущей записи ---
+                bookingStateService.put(chatId, bookingData);
 
 
                 StringBuilder sb = new StringBuilder();
-                sb.append("<b>✅ Вы выбрали дату и время:</b>\n")
-                        .append("⏰ <i>").append(formatUserFriendlyDatetime(bookingData.getDatetime())).append("</i>\n")
-                        .append("💈 <b>Мастер:</b> ").append(bookingData.getStaffName()).append("\n");
+                sb.append("✅<b>Вы выбрали дату и время:</b>\n")
+                        .append("⏰ ").append(formatUserFriendlyDatetime(bookingData.getDatetime())).append("\n")
+                        .append("💈<b>Мастер:</b>").append(bookingData.getStaffName()).append("\n");
 
                 if (bookingData.getServiceNames() != null && !bookingData.getServiceNames().isEmpty()) {
-                    sb.append("✂️ <b>Услуги:</b> ")
+                    sb.append("✂️<b>Услуги:</b>")
                             .append(String.join(", ", bookingData.getServiceNames()))
                             .append("\n")
                             .append("• • • • • • • • • • • • • •\n")  // лёгкая разделительная линия
-                            .append("Пожалуйста, введите своё имя."); // один раз
+                            .append(" <b>Пожалуйста, введите своё имя</b>."); // один раз
                 }
 
-                SendMessage message = SendMessage.builder()
-                        .chatId(chatId.toString())
-                        .text(sb.toString())
-                        .parseMode("HTML") // важно!
-                        .build();
-                try {
-                    bot.execute(message);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
+                messageSender.sendMessage(
+                        chatId,
+                        sb.toString(),
+                        null,        // клавиатуры нет
+                        "HTML"
+                );
+            }, () -> messageSender.sendMessage(chatId, "❌ Барбершоп не найден."));
 
         } catch (Exception e) {
             log.error("Ошибка при обработке callback slot_", e);
-            sendMessage(bot, chatId, "❌ Произошла ошибка при выборе времени.");
+            messageSender.sendMessage(chatId, "❌ Произошла ошибка при выборе времени.");
         }
     }
 
@@ -163,10 +151,7 @@ public class SlotCallBackHandler implements CallBackHandler {
     }
 
     /**
-     * Восстанавливает ISO строку даты-времени из безопасного формата с подчеркиванием и дефисом.
-     *
-     * @param safeDatetime строка формата "yyyy-MM-dd_HH-mm"
-     * @return строка формата "yyyy-MM-ddTHH:mm:ss"
+     * Преобразует внутренний строковый формат даты в стандарт ISO 8601.
      */
     private String restoreIsoDatetime(String safeDatetime) {
         String[] parts = safeDatetime.split("_");
@@ -175,18 +160,4 @@ public class SlotCallBackHandler implements CallBackHandler {
         return date + "T" + time + ":00";
     }
 
-    /**
-     * Вспомогательный метод для отправки сообщения пользователю.
-     *
-     * @param bot    экземпляр TelegramBot
-     * @param chatId идентификатор чата
-     * @param text   текст сообщения
-     */
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
-        try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
-        }
-    }
 }

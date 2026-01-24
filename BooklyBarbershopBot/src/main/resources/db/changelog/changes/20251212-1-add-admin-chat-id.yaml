@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20251212-1
+      author: eugene
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: barbershop
+                columnName: admin_chat_id
+      changes:
+        - addColumn:
+            tableName: barbershop
+            columns:
+              - column:
+                  name: admin_chat_id
+                  type: BIGINT
+                  constraints:
+                    nullable: true

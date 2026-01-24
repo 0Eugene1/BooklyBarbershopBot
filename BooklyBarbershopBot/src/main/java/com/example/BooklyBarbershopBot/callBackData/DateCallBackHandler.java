@@ -3,13 +3,13 @@ package com.example.BooklyBarbershopBot.callBackData;
 import com.example.BooklyBarbershopBot.dto.BookTimeDto;
 import com.example.BooklyBarbershopBot.dto.BookTimeResponse;
 import com.example.BooklyBarbershopBot.dto.BookingData;
+import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
-import com.example.BooklyBarbershopBot.telegramBot.TelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -21,12 +21,11 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 /**
- * Обработчик callback-запросов выбора даты для записи.
+ * Обработчик callback-запросов выбора даты для формирования списка доступного времени.
  * <p>
- * Обрабатывает callbackData, начинающиеся с "date_".
- * Извлекает дату, идентификаторы мастера и услуги, а также slug барбершопа из callbackData.
- * Запрашивает доступное время записи у Yclients API и отправляет пользователю
- * клавиатуру с кнопками выбора конкретного времени.
+ * Класс отвечает за переход от выбранного дня к конкретному временному слоту.
+ * Он извлекает контекст записи (мастер, услуги, филиал), запрашивает у Yclients API
+ * доступные интервалы для этой комбинации и отрисовывает сетку времени.
  */
 @Slf4j
 @Component
@@ -35,12 +34,13 @@ public class DateCallBackHandler implements CallBackHandler {
 
     private final BarbershopService barbershopService;
     private final YclientsService yclientsService;
+    private final BookingStateService bookingStateService;
 
     /**
-     * Проверяет, начинается ли callbackData с "date_".
+     * Проверяет, является ли callback-запрос выбором даты.
      *
-     * @param data данные callback
-     * @return true, если поддерживает обработку выбора даты
+     * @param data строка callbackData, ожидается префикс {@code date_}.
+     * @return {@code true}, если обработчик поддерживает данные.
      */
     @Override
     public boolean supports(String data) {
@@ -48,21 +48,29 @@ public class DateCallBackHandler implements CallBackHandler {
     }
 
     /**
-     * Обрабатывает callbackQuery, извлекает параметры даты, мастера, услуги и slug,
-     * получает доступные временные слоты через Yclients и отправляет пользователю меню выбора времени.
+     * Обрабатывает выбор даты пользователем.
+     * <p>
+     * Особенности реализации:
+     * <ol>
+     * <li>Десериализация списка ID услуг из строки callback.</li>
+     * <li>Запрос временных слотов через {@link YclientsService#getAvailableTimes}.</li>
+     * <li>Трансформация ISO-даты в безопасный формат для callbackData (замена ":" на "-" и "T" на "_"),
+     * чтобы избежать конфликтов при парсинге и уложиться в лимиты Telegram.</li>
+     * <li>Динамическая проверка длины callbackData (64 байта) с механизмом сокращения данных при превышении.</li>
+     * </ol>
      *
-     * @param callbackQuery объект callbackQuery
-     * @param bot           экземпляр TelegramBot
+     * @param callbackQuery объект события нажатия кнопки.
+     * @param messageSender компонент для отправки сообщений.
      */
     @Override
-    public void handle(CallbackQuery callbackQuery, TelegramBot bot) {
+    public void handle(CallbackQuery callbackQuery, MessageSender messageSender) {
         String data = callbackQuery.getData();
         Long chatId = callbackQuery.getMessage().getChatId();
 
         try {
             String[] parts = data.split("_", 5);
             if (parts.length < 5) {
-                sendMessage(bot, chatId, "⚠️ Ошибка в данных callback.");
+                messageSender.sendMessage(chatId, "⚠️ Ошибка в данных callback.");
                 return;
             }
 
@@ -75,9 +83,9 @@ public class DateCallBackHandler implements CallBackHandler {
 
             String slug = parts[4];
 
-            BookingData bookingData = bot.getBookingCache().get(chatId);
+            BookingData bookingData = bookingStateService.get(chatId);
             if (bookingData == null || bookingData.getServiceIds() == null || bookingData.getServiceIds().isEmpty()) {
-                sendMessage(bot, chatId, "⚠️ Не выбраны услуги для записи.");
+                messageSender.sendMessage(chatId, "⚠️ Не выбраны услуги для записи.");
                 return;
             }
 
@@ -89,7 +97,7 @@ public class DateCallBackHandler implements CallBackHandler {
                             yclientsService.getAvailableTimes(companyId, staffId, date, serviceIds);
 
                     if (timeResponse.getData() == null || timeResponse.getData().isEmpty()) {
-                        sendMessage(bot, chatId, "⏱ Нет свободного времени на эту дату.");
+                        messageSender.sendMessage(chatId, "⏱ Нет свободного времени на эту дату.");
                         return;
                     }
 
@@ -110,42 +118,30 @@ public class DateCallBackHandler implements CallBackHandler {
                                 .build();
                     });
 
-                    InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-                    keyboard.setKeyboard(rows);
-
-                    SendMessage message = SendMessage.builder()
-                            .chatId(chatId.toString())
-                            .text("⏰ Выберите удобное время:")
-                            .replyMarkup(keyboard)
-                            .build();
-
-                    bot.execute(message);
+                    messageSender.sendMessage(
+                            chatId,"⏰ Выберите удобное время:",
+                            InlineKeyboardMarkup.builder()
+                                    .keyboard(rows)
+                                    .build());
                 } catch (Exception e) {
                     log.error("Ошибка при получении времени", e);
-                    sendMessage(bot, chatId, "❌ Не удалось получить доступное время.");
+                    messageSender.sendMessage(chatId, "❌ Не удалось получить доступное время.");
                 }
-            }, () -> sendMessage(bot, chatId, "❌ Барбершоп не найден."));
+            }, () -> messageSender.sendMessage(chatId, "❌ Барбершоп не найден."));
         } catch (Exception e) {
             log.error("Ошибка при обработке callback date_", e);
-            sendMessage(bot, chatId, "❌ Произошла ошибка. Попробуйте позже.");
+            messageSender.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
     }
 
     /**
-     * Вспомогательный метод для отправки сообщений пользователю.
-     *
-     * @param bot    экземпляр TelegramBot
-     * @param chatId идентификатор чата
-     * @param text   текст сообщения
+     * Вспомогательный метод для построения клавиатуры из списка элементов.
+     * * @param <T> тип исходных данных.
+     * @param items список элементов.
+     * @param columns количество колонок.
+     * @param buttonMapper логика создания кнопки из элемента.
+     * @return сформированная сетка кнопок.
      */
-    private void sendMessage(TelegramBot bot, Long chatId, String text) {
-        try {
-            bot.execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке сообщения", e);
-        }
-    }
-
     private <T> List<List<InlineKeyboardButton>> buildKeyboard(
             List<T> items,
             int columns,
