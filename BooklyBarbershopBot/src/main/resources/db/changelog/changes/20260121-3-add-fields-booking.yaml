@@ -4,7 +4,6 @@ databaseChangeLog:
       author: eugene
       comment: Добавление end_time, total_duration_minutes и временное изменение типа status
       changes:
-        # 1. Добавляем end_time
         - addColumn:
             tableName: booking
             columns:
@@ -12,9 +11,9 @@ databaseChangeLog:
                   name: end_time
                   type: timestamptz
                   constraints:
-                    nullable: true   # потом можно сделать not null отдельным changeset-ом
+                    nullable: true
 
-        # 2. Добавляем total_duration_minutes
+
         - addColumn:
             tableName: booking
             columns:
@@ -24,13 +23,13 @@ databaseChangeLog:
                   constraints:
                     nullable: true
 
-        # 3. Меняем тип status (временно на VARCHAR, если был другой тип)
+
         - modifyDataType:
             tableName: booking
             columnName: status
             newDataType: VARCHAR(50)
 
-      # Опционально: rollback на случай отката
+
       rollback:
         - dropColumn:
             tableName: booking
@@ -41,4 +40,4 @@ databaseChangeLog:
         - modifyDataType:
             tableName: booking
             columnName: status
-            newDataType: VARCHAR(20)   # верни предыдущий тип, если знаешь
+            newDataType: VARCHAR(20)

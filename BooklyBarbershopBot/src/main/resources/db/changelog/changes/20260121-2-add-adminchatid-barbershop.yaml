@@ -3,9 +3,9 @@ databaseChangeLog:
       id: 20260121-2-add-adminchatid-barbershop
       author: eugene
       preConditions:
-        - onFail: MARK_RAN     # ← ключевой момент: если precondition НЕ выполняется → отметит changeset выполненным, без ошибки
+        - onFail: MARK_RAN
         - onError: MARK_RAN
-        - not:                 # ← "НЕ существует" → добавляем колонку только если её НЕТ
+        - not:
             - columnExists:
                 tableName: barbershop
                 columnName: admin_chat_id
@@ -17,4 +17,4 @@ databaseChangeLog:
                   name: admin_chat_id
                   type: BIGINT
                   constraints:
-                    nullable: true   # или false — под твою логику
+                    nullable: true

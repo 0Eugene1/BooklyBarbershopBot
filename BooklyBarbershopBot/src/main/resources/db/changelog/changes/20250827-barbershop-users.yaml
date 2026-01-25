@@ -22,5 +22,3 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: false
-      # primary key лучше вынести отдельным change (см. ниже), но если хочешь оставить здесь — можно
-      # но в твоём варианте primaryKey стоит внутри createTable — это тоже работает

@@ -15,6 +15,6 @@ databaseChangeLog:
             columns:
               - column:
                   name: barbershop_id
-                  type: uuid          # UUID в нижнем регистре — стандарт для Liquibase/PostgreSQL
+                  type: uuid
                   constraints:
                     nullable: true

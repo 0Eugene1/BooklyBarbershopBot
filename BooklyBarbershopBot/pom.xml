@@ -6,7 +6,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.5.3</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath/>
     </parent>
     <groupId>com.example</groupId>
     <artifactId>BooklyBarbershopBot</artifactId>
@@ -32,12 +32,9 @@
         <postgresql.version>42.7.3</postgresql.version>
         <liquibase.version>4.31.1</liquibase.version>
         <jackson.databind.ver>2.19.0</jackson.databind.ver>
-<!--        <hibernate.52.version>2.21.1</hibernate.52.version>-->
         <spring.retry.version>2.0.3</spring.retry.version>
         <spring.aspects.version>7.0.0-M1</spring.aspects.version>
-        <db.url>jdbc:postgresql://localhost:5432/barberdb</db.url>
-        <db.user>postgres</db.user>
-        <db.pass>5117</db.pass>
+        <liquibase-maven-plugin>4.31.1</liquibase-maven-plugin>
     </properties>
     <dependencies>
         <dependency>
@@ -77,28 +74,20 @@
             <artifactId>liquibase-core</artifactId>
             <version>${liquibase.version}</version>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>com.vladmihalcea</groupId>-->
-<!--            <artifactId>hibernate-types-52</artifactId>-->
-<!--            <version>${hibernate.52.version}</version>-->
-<!--        </dependency>-->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.databind.ver}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.hibernate.validator/hibernate-validator -->
         <dependency>
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.springframework.retry/spring-retry -->
         <dependency>
             <groupId>org.springframework.retry</groupId>
             <artifactId>spring-retry</artifactId>
             <version>${spring.retry.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.springframework/spring-aspects -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-aspects</artifactId>
@@ -139,12 +128,15 @@
             <plugin>
                 <groupId>org.liquibase</groupId>
                 <artifactId>liquibase-maven-plugin</artifactId>
-                <version>4.31.1</version>
+                <version>${liquibase-maven-plugin}</version>
                 <configuration>
                     <changeLogFile>db/changelog/db.changelog-master.yaml</changeLogFile>
-                    <url>${db.url}</url>
-                    <username>${db.user}</username>
-                    <password>${db.pass}</password>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <url>${env.DB_URL}</url>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <username>${env.DB_USER}</username>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <password>${env.DB_PASS}</password>
                     <driver>org.postgresql.Driver</driver>
                 </configuration>
             </plugin>
