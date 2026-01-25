@@ -49,4 +49,14 @@ public class InlineKeyboard {
 
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
+    public InlineKeyboardMarkup startWithoutSlugKeyboard() {
+        InlineKeyboardButton choose = InlineKeyboardButton.builder()
+                .text("📍 Выбрать барбершоп")
+                .url("https://t.me/BooklyHelp")
+                .build();
+
+        return InlineKeyboardMarkup.builder()
+                .keyboard(List.of(List.of(choose)))
+                .build();
+    }
 }

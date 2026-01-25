@@ -113,4 +113,10 @@ public class ClientService {
                 }
         );
     }
+    public Optional<String> getLastUsedSlug(Long telegramId) {
+        return findByTelegramId(telegramId)
+                .map(Client::getLastUsedSlug)
+                .filter(slug -> slug != null && !slug.isBlank());
+    }
+
 }
