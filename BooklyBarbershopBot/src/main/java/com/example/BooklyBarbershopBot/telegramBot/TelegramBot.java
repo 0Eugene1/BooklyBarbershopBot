@@ -304,69 +304,116 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         log.info("Получено сообщение: {}", text);
 
+        if (text == null || text.isBlank()) {
+            return;
+        }
+
+        // =========================
+        // /start command handling
+        // =========================
         if (text.startsWith("/start")) {
             String[] parts = text.split(" ", 2);
+
+            // /start <slug>
             if (parts.length > 1 && !parts[1].trim().isEmpty()) {
                 String slug = parts[1].trim();
-                log.info("Парсинг slug: {} для chatId={}", slug, chatId);
-
-                barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
-                    log.info("Барбершоп найден: slug={}, name={} для chatId={}", slug, barbershop.getName(), chatId);
-                    // Сохраняем slug в клиенте
-                    clientService.saveOrUpdateLastUsedSlug(chatId, slug);
-
-                    String greeting = barbershop.getGreeting() != null ? barbershop.getGreeting() : "Добро пожаловать!";
-                    String fullText = "🏪 " + barbershop.getName() + "\n\n" + greeting;
-
-                    SendMessage response = SendMessage.builder()
-                            .chatId(chatId.toString())
-                            .text(fullText)
-                            .replyMarkup(inlineKeyboard.createMenuInlineKeyboard(slug))
-                            .build();
-
-                    try {
-                        execute(response);
-                        log.info("Приветственное сообщение отправлено для slug={} и chatId={}", slug, chatId);
-                        Map<String, Object> eventData = new HashMap<>();
-                        eventData.put("slug", slug);
-                        eventData.put("barbershopName", barbershop.getName());
-                        botEventService.saveEvent(chatId, barbershop.getId(), "USER_STARTED", eventData);
-                    } catch (TelegramApiException e) {
-                        log.error("Ошибка при отправке приветствия для slug={} и chatId={}", slug, chatId, e);
-                    }
-                }, () -> {
-                    log.warn("Барбершоп с slug={} не найден для chatId={}", slug, chatId);
-                    try {
-                        execute(SendMessage.builder()
-                                .chatId(chatId.toString())
-                                .text("❌ Барбершоп с slug '" + slug + "' не найден.")
-                                .build());
-                        Map<String, Object> eventData = new HashMap<>();
-                        eventData.put("slug", slug);
-                        eventData.put("action", "invalid_slug");
-                        // Сохраняем событие без barbershopId, если это допустимо, или пропускаем
-                        botEventService.saveEvent(chatId, null, "USER_STARTED_INVALID_SLUG", eventData);
-                    } catch (TelegramApiException e) {
-                        log.error("Ошибка при отправке сообщения о ненайденном барбершопе для chatId={}", chatId, e);
-                    }
-                });
-            } else {
-                // Обработка /start без slug
-                log.info("Обработка /start без slug для chatId={}", chatId);
-                try {
-                    execute(SendMessage.builder()
-                            .chatId(chatId.toString())
-                            .text("""
-                              👋 Добро пожаловать! Чтобы начать, введите команду /start и добавьте через пробел уникальное название барбершопа. Например: /start <barbershop-...>
-                              
-                              Это название указывает, в какой барбершоп вы хотите записаться. Вы также можете ввести /menu, чтобы посмотреть доступные действия.""")
-                            .build());
-                    log.info("Сообщение для /start без slug отправлено для chatId={}", chatId);
-                    // Не сохраняем событие USER_STARTED, так как barbershopId неизвестен
-                } catch (TelegramApiException e) {
-                    log.error("Ошибка при отправке сообщения для /start без slug для chatId={}", chatId, e);
-                }
+                handleStartWithSlug(chatId, slug);
+                return;
             }
+
+            // /start (без slug)
+            clientService.getLastUsedSlug(chatId).ifPresentOrElse(
+                    lastSlug -> {
+                        log.info("Используем lastUsedSlug={} для chatId={}", lastSlug, chatId);
+                        handleStartWithSlug(chatId, lastSlug);
+                    },
+                    () -> {
+                        log.info("lastUsedSlug не найден, показываем стартовый экран");
+                        sendStartWithoutSlug(chatId);
+                    }
+            );
+            return;
         }
     }
+
+        private void sendStartWithoutSlug(Long chatId) {
+            try {
+                execute(SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text("""
+    👋 Добро пожаловать!
+    
+    Этот бот помогает записаться в барбершоп онлайн ✂️
+    
+    Чтобы начать запись:
+    1️⃣ Перейдите по ссылке на нужный барбершоп
+    2️⃣ Бот сразу откроет его страницу и покажет меню
+    
+    📢 Список подключённых барбершопов доступен в нашем официальном канале.
+    
+    Если у вас уже есть код барбершопа, вы можете ввести:
+    <code>/start barbershop-name</code>
+    """)
+                        .replyMarkup(inlineKeyboard.startWithoutSlugKeyboard())
+                        .parseMode("HTML")
+                        .build());
+            } catch (TelegramApiException e) {
+                log.error("Ошибка при отправке /start без slug", e);
+            }
+        }
+
+    private void handleStartWithSlug(Long chatId, String slug) {
+        log.info("Парсинг slug: {} для chatId={}", slug, chatId);
+
+        barbershopService.getBySlug(slug).ifPresentOrElse(barbershop -> {
+            log.info("Барбершоп найден: slug={}, name={}", slug, barbershop.getName());
+
+            clientService.saveOrUpdateLastUsedSlug(chatId, slug);
+
+            String greeting = barbershop.getGreeting() != null
+                    ? barbershop.getGreeting()
+                    : "Добро пожаловать!";
+
+            String fullText = "🏪 " + barbershop.getName() + "\n\n" + greeting;
+
+            try {
+                execute(SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text(fullText)
+                        .replyMarkup(inlineKeyboard.createMenuInlineKeyboard(slug))
+                        .build());
+
+                Map<String, Object> eventData = new HashMap<>();
+                eventData.put("slug", slug);
+                eventData.put("barbershopName", barbershop.getName());
+                botEventService.saveEvent(chatId, barbershop.getId(), "USER_STARTED", eventData);
+
+            } catch (TelegramApiException e) {
+                log.error("Ошибка при отправке приветствия", e);
+            }
+
+        }, () -> sendInvalidSlug(chatId, slug));
+    }
+    private void sendInvalidSlug(Long chatId, String slug) {
+        try {
+            execute(SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text("""
+❌ Барбершоп не найден.
+
+Пожалуйста, выберите барбершоп из списка 👇
+""")
+                    .replyMarkup(inlineKeyboard.startWithoutSlugKeyboard())
+                    .build());
+
+            Map<String, Object> eventData = new HashMap<>();
+            eventData.put("slug", slug);
+            eventData.put("action", "invalid_slug");
+            botEventService.saveEvent(chatId, null, "USER_STARTED_INVALID_SLUG", eventData);
+
+        } catch (TelegramApiException e) {
+            log.error("Ошибка при отправке сообщения о неверном slug", e);
+        }
+    }
+
 }
