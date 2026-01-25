@@ -94,8 +94,16 @@ public class StaffCallBackHandler implements CallBackHandler {
                     List<List<InlineKeyboardButton>> rows = new ArrayList<>();
                     for (ServiceDto service : staffServices) {
                         InlineKeyboardButton button = new InlineKeyboardButton();
-                        button.setText(service.getTitle() +
-                                (service.getPriceMin() != null ? " (от " + service.getPriceMin().intValue() + "₽)" : ""));
+                        button.setText(
+                                shortTitle(service) +
+                                        (service.getPriceMin() != null
+                                                ? " · " + service.getPriceMin().intValue() + "₽"
+                                                : "")
+                        );
+                        //Список услуг с полным названием и прайосм (Мужская стрижка (от 2000Р) - ок
+                        // Оформление бороды опасной бритвой (.... Стрижка и оформление бороды (от 240...))
+//                        button.setText(service.getTitle() +
+//                                (service.getPriceMin() != null ? " (от " + service.getPriceMin().intValue() + "₽)" : ""));
                         button.setCallbackData("service_" + service.getId() + "_" + staffIdStr + "_" + slug);
                         rows.add(Collections.singletonList(button));
                     }
@@ -118,6 +126,15 @@ public class StaffCallBackHandler implements CallBackHandler {
             log.error("Ошибка при обработке callback staff_", e);
             messageSender.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
         }
+    }
+
+    private String shortTitle(ServiceDto service) {
+        String title = service.getTitle();
+
+        if (title.length() > 30) {
+            return title.substring(0, 27) + "...";
+        }
+        return title;
     }
 
 }
