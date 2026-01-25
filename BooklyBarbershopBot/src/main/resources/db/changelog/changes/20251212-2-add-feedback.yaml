@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 20251212-1          # ← если это другой файл, можно оставить, но лучше уникальный id
+      id: 20251212-1
       author: eugene
       preConditions:
         - onFail: MARK_RAN

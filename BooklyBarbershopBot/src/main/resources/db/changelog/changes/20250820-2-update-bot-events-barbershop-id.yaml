@@ -12,15 +12,10 @@ databaseChangeLog:
                 tableName: bot_events
                 columnName: barbershop_id
       changes:
-        # 1. Удаляем старую колонку (если существует и тип неправильный)
         - dropColumn:
             tableName: bot_events
             columnName: barbershop_id
-            # но dropColumn может упасть, если колонка используется → осторожно!
-            # лучше использовать precondition на columnExists + тип, но это сложно
-            # поэтому можно оставить, но с осторожностью
 
-        # 2. Добавляем новую с правильным типом
         - addColumn:
             tableName: bot_events
             columns:
@@ -30,7 +25,6 @@ databaseChangeLog:
                   constraints:
                     nullable: false
 
-        # 3. Индекс — отдельный precondition
   - changeSet:
       id: 20250820-2-index
       author: eugene

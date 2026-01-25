@@ -3,9 +3,9 @@ databaseChangeLog:
       id: 3
       author: Eugene
       preConditions:
-        - onFail: MARK_RAN     # если precondition НЕ выполняется → просто отметит changeset как выполненный, без ошибки
+        - onFail: MARK_RAN
         - onError: MARK_RAN
-        - not:                 # "НЕ существует" — т.е. добавляем только если колонки ещё нет
+        - not:
             - columnExists:
                 tableName: barbershop
                 columnName: reviews_url
@@ -16,4 +16,3 @@ databaseChangeLog:
               - column:
                   name: reviews_url
                   type: VARCHAR(500)
-                  # constraints: nullable: true   ← если нужно, добавь
