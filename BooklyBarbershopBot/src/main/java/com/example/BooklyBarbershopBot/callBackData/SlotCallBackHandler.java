@@ -115,10 +115,10 @@ public class SlotCallBackHandler implements CallBackHandler {
                 StringBuilder sb = new StringBuilder();
                 sb.append("✅<b>Вы выбрали дату и время:</b>\n")
                         .append("⏰ ").append(formatUserFriendlyDatetime(bookingData.getDatetime())).append("\n")
-                        .append("💈<b>Мастер:</b>").append(bookingData.getStaffName()).append("\n");
+                        .append("💈<b>Мастер:</b> ").append(bookingData.getStaffName()).append("\n");
 
                 if (bookingData.getServiceNames() != null && !bookingData.getServiceNames().isEmpty()) {
-                    sb.append("✂️<b>Услуги:</b>")
+                    sb.append("✂️<b>Услуги:</b> ")
                             .append(String.join(", ", bookingData.getServiceNames()))
                             .append("\n")
                             .append("• • • • • • • • • • • • • •\n")  // лёгкая разделительная линия
