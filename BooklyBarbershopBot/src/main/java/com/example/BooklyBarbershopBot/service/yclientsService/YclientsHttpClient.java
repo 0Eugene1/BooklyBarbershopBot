@@ -30,10 +30,10 @@ public class YclientsHttpClient {
 
     private WebClient webClient;
 
-    @Value("${YCLIENTS_PARTNER_TOKEN}")
+    @Value("${YCLIENTS_PARTNER_TOKEN:${yclients.partner-token:}}")
     private String partnerToken;
 
-    @Value("${YCLIENTS_USER_TOKEN}")
+    @Value("${YCLIENTS_USER_TOKEN:${yclients.user-token:}}")
     private String userToken;
 
     @Value("${YCLIENTS_BASE_URL:https://api.yclients.com/api/v1}")

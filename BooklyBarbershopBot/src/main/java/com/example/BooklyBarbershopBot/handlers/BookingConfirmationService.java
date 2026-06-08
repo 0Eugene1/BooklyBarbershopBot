@@ -7,6 +7,7 @@ import com.example.BooklyBarbershopBot.enums.BookingStatus;
 import com.example.BooklyBarbershopBot.globalException.YclientsSmsConfirmationException;
 import com.example.BooklyBarbershopBot.sendMessage.TelegramMessageSender;
 import com.example.BooklyBarbershopBot.service.BookingService;
+import com.example.BooklyBarbershopBot.service.BookingStateService;
 import com.example.BooklyBarbershopBot.service.ClientService;
 import com.example.BooklyBarbershopBot.service.yclientsService.YclientsService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class BookingConfirmationService {
     private final ClientService clientService;
     private final BookingService bookingService;
     private final YclientsService yclientsService;
+    private final BookingStateService bookingStateService;
 
     /**
      * Выполняет финальное подтверждение записи.
@@ -41,12 +43,12 @@ public class BookingConfirmationService {
      * @param data    объект с накопленными данными о записи (мастер, время, услуги).
      * @param smsCode код подтверждения (может быть null при первой попытке).
      * @param sender  компонент для отправки уведомлений пользователю.
+     * @return {@code true}, если запись подтверждена в Yclients и локально переведена в CONFIRMED.
      */
-    public void confirmBooking(Long chatId, BookingData data, String smsCode, TelegramMessageSender sender) {
+    public boolean confirmBooking(Long chatId, BookingData data, String smsCode, TelegramMessageSender sender) {
         log.info("Начало подтверждения записи для chatId: {}, мастерId: {}", chatId, data.getStaffId());
 
         try {
-            // 1. Синхронизируем данные клиента
             Client client = clientService.saveOrGetClient(
                     data.getPhone(),
                     chatId,
@@ -54,34 +56,39 @@ public class BookingConfirmationService {
                     "no-reply@example.com"
             );
 
-            // 2. Инициализируем локальную сущность записи
-            Booking booking = bookingService.createBookingFromData(client, data);
+            Booking booking = bookingService.resolvePendingBooking(client, data);
+            data.setPendingBookingId(booking.getId());
 
-            // 3. Пытаемся создать запись в CRM
             boolean success = yclientsService.createBooking(data, client, smsCode);
 
             if (success) {
-                // Обновляем локальную запись данными из CRM
                 booking.setRecordId(data.getRecordId());
                 booking.setRecordHash(data.getRecordHash());
                 booking.setStatus(BookingStatus.CONFIRMED);
 
                 bookingService.saveBooking(booking);
+                bookingStateService.remove(chatId);
+                data.setAwaitingCode(false);
+
                 sender.sendMessage(chatId, "✅ Запись подтверждена! Ждем вас в назначенное время.");
                 log.info("Запись успешно подтверждена: recordId={}", data.getRecordId());
-            } else {
-                sender.sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код или попробуйте позже.");
+                return true;
             }
 
+            sender.sendMessage(chatId, "❌ Не удалось подтвердить запись. Проверьте код или попробуйте позже.");
+            return false;
+
         } catch (YclientsSmsConfirmationException e) {
-            // Перехват требования SMS-верификации
             data.setAwaitingCode(true);
             sender.sendMessage(chatId, "🔐 Ваш номер требует подтверждения. Пожалуйста, введите код из SMS, который мы отправили.");
-            log.info("Требуется подтверждение по SMS для chatId: {}", chatId);
+            log.info("Требуется подтверждение по SMS для chatId: {}, pendingBookingId={}",
+                    chatId, data.getPendingBookingId());
+            return false;
 
         } catch (Exception e) {
             log.error("Критическая ошибка при подтверждении записи для chatId={}", chatId, e);
             sender.sendMessage(chatId, "❌ Произошла ошибка при создании записи. Пожалуйста, свяжитесь с администратором.");
+            return false;
         }
     }
 }

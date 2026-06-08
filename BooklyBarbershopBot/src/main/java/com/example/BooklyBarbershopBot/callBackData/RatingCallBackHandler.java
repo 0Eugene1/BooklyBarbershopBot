@@ -5,6 +5,7 @@ import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.adminBotService.FeedbackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -25,6 +26,7 @@ import java.util.List;
  * </ol>
  */
 @Component
+@Order(10)
 @Slf4j
 @RequiredArgsConstructor
 public class RatingCallBackHandler implements CallBackHandler {

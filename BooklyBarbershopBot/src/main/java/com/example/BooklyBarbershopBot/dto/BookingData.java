@@ -27,6 +27,9 @@ public class BookingData {
     private Long recordId;
     private String recordHash;
 
+    /** Локальная запись в статусе PENDING до подтверждения в Yclients. */
+    private Long pendingBookingId;
+
     private String fullName;
     private boolean awaitingFullName;
 

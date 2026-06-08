@@ -5,7 +5,6 @@ import com.example.BooklyBarbershopBot.entity.Barbershop;
 import com.example.BooklyBarbershopBot.entity.Booking;
 import com.example.BooklyBarbershopBot.entity.Client;
 import com.example.BooklyBarbershopBot.enums.BookingStatus;
-import com.example.BooklyBarbershopBot.repository.BookingRepository;
 import com.example.BooklyBarbershopBot.sendMessage.MessageSender;
 import com.example.BooklyBarbershopBot.service.BarbershopService;
 import com.example.BooklyBarbershopBot.service.BookingService;
@@ -43,7 +42,6 @@ public class CancelCallBackHandler implements CallBackHandler {
     private final BarbershopService barbershopService;
     private final BotEventService boteventService;
     private final BookingStateService bookingStateService;
-    private final BookingRepository bookingRepository;
 
     /**
      * Проверяет, является ли запрос командой на отмену.
@@ -167,8 +165,8 @@ public class CancelCallBackHandler implements CallBackHandler {
         // Если запись уже прошла
         if (booking.getEndTime().isBefore(now)) {
             text.append("\nℹ️ <b>Эта запись уже завершена и не может быть отменена.</b>");
-            booking.setStatus(BookingStatus.COMPLETED);  // ставим статус через enum
-            bookingRepository.save(booking);                // сохраняем изменения
+            booking.setStatus(BookingStatus.COMPLETED);
+            bookingService.saveBooking(booking);
             messageSender.sendMarkdown(chatId, text.toString());
             return;
         }
@@ -195,7 +193,7 @@ public class CancelCallBackHandler implements CallBackHandler {
             boolean success = yclientsService.cancelBooking(recordId, recordHash);
             if (success) {
                 booking.setStatus(BookingStatus.CANCELED);
-                bookingRepository.save(booking);
+                bookingService.saveBooking(booking);
                 bookingStateService.remove(chatId);
 
                 //Сохранение события
@@ -211,7 +209,7 @@ public class CancelCallBackHandler implements CallBackHandler {
             } else {
                 // запись не удалась, ставим COMPLETED
                 booking.setStatus(BookingStatus.COMPLETED);
-                bookingRepository.save(booking);
+                bookingService.saveBooking(booking);
 
                 text.append("\nℹ️ <b>Эта запись уже выполнена и не может быть отменена.</b>");
                 messageSender.sendMessage(chatId, text.toString(), null);
@@ -221,7 +219,7 @@ public class CancelCallBackHandler implements CallBackHandler {
             log.error("Ошибка при вызове Yclients API для отмены записи recordId={} для chatId={}: {}", recordId, chatId, e.getMessage());
             if (e.getMessage().contains("403") || e.getMessage().contains("Запись подтверждена в филиале")) {
                 booking.setStatus(BookingStatus.COMPLETED);
-                bookingRepository.save(booking);
+                bookingService.saveBooking(booking);
 
                 text.append("\nℹ️ <b>Эта запись уже выполнена и не может быть отменена.</b>");
                 messageSender.sendMessage(chatId, text.toString(), null);

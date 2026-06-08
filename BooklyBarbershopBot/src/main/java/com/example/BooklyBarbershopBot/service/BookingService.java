@@ -44,7 +44,7 @@ public class BookingService {
      * Преобразует временные данные сессии бронирования в постоянную запись в БД.
      * <p>
      * Вычисляет время окончания услуги на основе длительности и устанавливает
-     * статус CONFIRMED.
+     * статус PENDING до подтверждения во внешней CRM.
      *
      * @param client клиент, владелец записи.
      * @param data   накопленные данные о выбранном мастере, услугах и времени.
@@ -85,16 +85,40 @@ public class BookingService {
                 // Берем первую услугу как основную для поиска, но сохраняем все названия через запятую
                 .serviceId(data.getServiceIds().isEmpty() ? null : data.getServiceIds().getFirst())
                 .serviceName(String.join(", ", data.getServiceNames()))
-                .status(BookingStatus.CONFIRMED)
+                .status(BookingStatus.PENDING)
                 .recordId(data.getRecordId())
                 .recordHash(data.getRecordHash())
                 .barbershopId(barbershopId)
                 .build();
 
-        log.info("Локальная запись создана: клиент={}, мастер={}, время={}",
+        log.info("Локальная запись создана (PENDING): клиент={}, мастер={}, время={}",
                 client.getFullName(), data.getStaffName(), startTime);
 
         return bookingRepository.save(booking);
+    }
+
+    /**
+     * Возвращает существующую PENDING-запись для повторной попытки подтверждения
+     * или создаёт новую, если идентификатор отсутствует или запись уже не в PENDING.
+     */
+    @Transactional
+    public Booking resolvePendingBooking(Client client, BookingData data) {
+        if (data.getPendingBookingId() != null) {
+            Optional<Booking> existing = bookingRepository.findById(data.getPendingBookingId())
+                    .filter(b -> b.getClient().getId().equals(client.getId()))
+                    .filter(b -> b.getStatus() == BookingStatus.PENDING);
+
+            if (existing.isPresent()) {
+                log.info("Повторное использование PENDING-записи id={}", existing.get().getId());
+                return existing.get();
+            }
+            log.warn("PENDING-запись id={} недоступна, создаём новую", data.getPendingBookingId());
+        }
+        return createBookingFromData(client, data);
+    }
+
+    public Optional<Booking> findById(Long id) {
+        return bookingRepository.findById(id);
     }
 
     /**

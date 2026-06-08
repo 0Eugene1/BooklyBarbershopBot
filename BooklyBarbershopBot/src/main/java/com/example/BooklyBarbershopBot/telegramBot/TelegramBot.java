@@ -207,7 +207,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void confirmBooking(Long chatId, BookingData data, String smsCode) {
         try {
-            bookingConfirmationService.confirmBooking(chatId, data, smsCode, new TelegramMessageSender() {
+            boolean confirmed = bookingConfirmationService.confirmBooking(chatId, data, smsCode, new TelegramMessageSender() {
                 @Override
                 public void sendMessage(Long chatId, String text) {
                     TelegramBot.this.sendMessage(chatId, text);
@@ -218,24 +218,34 @@ public class TelegramBot extends TelegramLongPollingBot {
                     execute(message);
                 }
             });
-            Map<String, Object> eventData = new HashMap<>();
-            eventData.put("fullName", data.getFullName());
-            eventData.put("phone", data.getPhone());
-            eventData.put("serviceNames", data.getServiceNames());
-            eventData.put("datetime", data.getDatetime() != null ? data.getDatetime().toString() : null);
-            eventData.put("staffId", data.getStaffId());
-            eventData.put("staffName", data.getStaffName());
-            eventData.put("slug", data.getSlug());
-            eventData.put("recordId", data.getRecordId());
-            eventData.put("recordHash", data.getRecordHash());
-            UUID barbershopId = barbershopService.getBySlug(data.getSlug())
-                    .map(Barbershop::getId)
-                    .orElse(null);
-            botEventService.saveEvent(chatId, barbershopId, "BOOKING_CREATED", eventData);
+
+            if (confirmed) {
+                saveBookingCreatedEvent(chatId, data);
+            } else {
+                bookingCache.put(chatId, data);
+            }
         } catch (Exception e) {
             log.error("Failed to confirm booking for chatId={}", chatId, e);
             sendMessage(chatId, "Ошибка при подтверждении бронирования. Попробуйте снова.");
         }
+    }
+
+    private void saveBookingCreatedEvent(Long chatId, BookingData data) {
+        Map<String, Object> eventData = new HashMap<>();
+        eventData.put("fullName", data.getFullName());
+        eventData.put("phone", data.getPhone());
+        eventData.put("serviceNames", data.getServiceNames());
+        eventData.put("datetime", data.getDatetime() != null ? data.getDatetime().toString() : null);
+        eventData.put("staffId", data.getStaffId());
+        eventData.put("staffName", data.getStaffName());
+        eventData.put("slug", data.getSlug());
+        eventData.put("recordId", data.getRecordId());
+        eventData.put("recordHash", data.getRecordHash());
+        eventData.put("pendingBookingId", data.getPendingBookingId());
+        UUID barbershopId = barbershopService.getBySlug(data.getSlug())
+                .map(Barbershop::getId)
+                .orElse(null);
+        botEventService.saveEvent(chatId, barbershopId, "BOOKING_CREATED", eventData);
     }
 
 
@@ -269,6 +279,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleCancelCommand(Long chatId) {
+        bookingCache.remove(chatId);
         myBookingsHandler.handle(chatId, new MyBookingsHandler.TelegramMessageSender() {
             @Override
             public void sendMessage(Long chatId, String text) {
