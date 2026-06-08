@@ -1,5 +1,3 @@
-<img width="1684" height="1091" alt="image" src="https://github.com/user-attachments/assets/b09ab4f7-344f-45fb-adc4-642b04bd9659" /># BooklyBarbershopBot
-
 Telegram-бот для онлайн-записи в барбершопы.
 
 ## О проекте
